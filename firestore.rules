@@ -1,0 +1,59 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function roomPath(roomId) {
+      return /databases/$(database)/documents/rooms/$(roomId);
+    }
+
+    function isRoomMember(roomId) {
+      return signedIn()
+        && exists(roomPath(roomId))
+        && request.auth.uid in get(roomPath(roomId)).data.members;
+    }
+
+    match /rooms/{roomId} {
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.members.size() == 1
+        && request.auth.uid in request.resource.data.members
+        && request.resource.data.members[request.auth.uid].uid == request.auth.uid;
+
+      allow read: if signedIn();
+
+      allow update: if signedIn()
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.members.size() <= 8
+        && (
+          request.auth.uid in resource.data.members
+          || request.auth.uid in request.resource.data.members
+        );
+
+      allow delete: if signedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      match /entries/{entryId} {
+        allow read: if isRoomMember(roomId);
+
+        allow create, update: if isRoomMember(roomId)
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.weekId is string
+          && request.resource.data.dayIndex is int
+          && request.resource.data.dayIndex >= 0
+          && request.resource.data.dayIndex <= 6
+          && request.resource.data.photoDataUrl is string
+          && request.resource.data.photoDataUrl.size() < 700000
+          && request.resource.data.todos is list
+          && request.resource.data.todos.size() <= 30;
+
+        allow delete: if isRoomMember(roomId)
+          && resource.data.uid == request.auth.uid;
+      }
+    }
+  }
+}
