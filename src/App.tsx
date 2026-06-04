@@ -16,13 +16,13 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
-import "./App.css";
 import { auth, db } from "./firebase";
 import {HeartIcon} from "./assets/icon/HeartIcon.tsx";
 import {PhotoIcon} from "./assets/icon/PhotoIcon.tsx";
 import {PlusIcon} from "./assets/icon/PlusIcon.tsx";
 import {BackIcon} from "./assets/icon/BackIcon.tsx";
 import {PencilIcon} from "./assets/icon/PencilIcon.tsx";
+import "./App.css";
 
 const MAX_MEMBERS = 20;
 const STORAGE_KEY = "study-room-code";
