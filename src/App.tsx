@@ -1512,7 +1512,7 @@ function App() {
             <PhotoIcon size={30}/>
           </label>
           <input
-            className={'flex-1 py-[10px]'}
+            className={'min-w-0 flex-1 py-[10px]'}
             maxLength={255}
             onChange={(event) => setTodoText(event.target.value)}
             placeholder="해야할 일을 입력해요"
@@ -1578,7 +1578,7 @@ function App() {
 
   return (
     <main className="app-shell py-[20px]">
-      <header className="room-header fixed top-0 left-0 py-[20px] w-full bg-white px-[18px] pb-[16px] z-20 border-b border-[#e3dfd6]">
+      <header className="room-header w-full bg-white px-[18px] pb-[16px]">
         <div className="w-full flex items-center justify-between header-icon-actions">
           <button
             className="profile-icon-button"
@@ -1606,8 +1606,6 @@ function App() {
 
         </div>
       </header>
-      <div className={'w-full h-[80px]'}></div>
-
 
       {storyGroups.length > 0 && (
         <section className="story-rail px-[18px] pb-[14px]" aria-label="스토리">
@@ -2091,7 +2089,7 @@ function App() {
           <PhotoIcon size={30}/>
         </label>
         <input
-          className={'flex-1 py-[10px]'}
+          className={'min-w-0 flex-1 py-[10px]'}
           maxLength={255}
           onChange={(event) => setTodoText(event.target.value)}
           placeholder="해야할 일을 입력해요"
