@@ -2074,7 +2074,7 @@ function App() {
         </div>
       )}
 
-      <form className="profile-composer" onSubmit={addTodoFromProfile}>
+      <form className="profile-composer fixed gap-x-[10px] w-full flex justify-between left-1/2 bottom-0 z-[18] -translate-x-1/2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] backdrop-blur-[14px] px-[14px] py-[16px]" onSubmit={addTodoFromProfile}>
         <label className="profile-composer-photo-button">
           <input
             accept="image/*"
@@ -2085,12 +2085,14 @@ function App() {
           <PhotoIcon size={30}/>
         </label>
         <input
+          className={'flex-1'}
           maxLength={255}
           onChange={(event) => setTodoText(event.target.value)}
           placeholder="해야할 일을 입력해요"
           value={todoText}
         />
         <button
+          className={'text-[13px] p-[14px]'}
           disabled={!todoText.trim()}
           onClick={() => {
             void addTodo().then((didAddTodo) => {

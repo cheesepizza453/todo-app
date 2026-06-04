@@ -550,20 +550,7 @@ button:disabled,
 }
 
 .profile-composer {
-  position: fixed;
-  left: 50%;
-  bottom: 0;
-  z-index: 18;
-  display: grid;
-  grid-template-columns: 42px 1fr auto;
-  gap: 8px;
-  align-items: center;
-  width: min(100%, 860px);
-  transform: translateX(-50%);
-  border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 96%, transparent);
-  backdrop-filter: blur(14px);
-  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+
 }
 
 .profile-composer input {
