@@ -555,17 +555,13 @@ button:disabled,
 
 .profile-composer input {
   min-height: 42px;
-  border-radius: 999px;
+  border-radius: 6px;
   background: var(--surface);
 }
 
 .profile-composer button,
 .profile-composer-photo-button {
-  display: grid;
-  place-items: center;
-  min-height: 42px;
-  height: 42px;
-  border-radius: 999px;
+
 }
 
 .profile-composer button {
@@ -692,10 +688,6 @@ button:disabled,
 .story-bubble > figure {
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 56px;
-  border: 2px solid var(--accent);
-  border-radius: 50%;
   background: var(--mint);
   color: var(--mint-text);
   overflow: hidden;

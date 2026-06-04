@@ -1612,7 +1612,7 @@ function App() {
               onClick={() => openStory(group.member.uid)}
               type="button"
             >
-              <figure className={'w-[56px] h-[56px] rounded-full overflow-hidden'}>
+              <figure className={'w-[56px] h-[56px] rounded-full overflow-hidden border-2 border-[#4cb46e]'}>
                 {group.member.photoURL ? (
                   <img className={'w-full h-full object-cover'} src={group.member.photoURL} alt="" />
                 ) : (
@@ -1696,7 +1696,7 @@ function App() {
             );
 
           return (
-            <article className="day-slide px-[15px]">
+            <article className="day-slide px-[15px] pb-[100px]">
               <div className="friend-feed mt-[10px]">
                 {feedItems.length ? (
                   feedItems.map((item) => {
@@ -2074,7 +2074,7 @@ function App() {
         </div>
       )}
 
-      <form className="profile-composer fixed gap-x-[10px] w-full flex justify-between left-1/2 bottom-0 z-[18] -translate-x-1/2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] backdrop-blur-[14px] px-[14px] py-[16px]" onSubmit={addTodoFromProfile}>
+      <form className="profile-composer fixed gap-x-[10px] w-full flex items-center justify-between left-1/2 bottom-0 z-[18] -translate-x-1/2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] backdrop-blur-[14px] px-[14px] py-[16px]" onSubmit={addTodoFromProfile}>
         <label className="profile-composer-photo-button">
           <input
             accept="image/*"
@@ -2085,14 +2085,14 @@ function App() {
           <PhotoIcon size={30}/>
         </label>
         <input
-          className={'flex-1'}
+          className={'flex-1 py-[10px]'}
           maxLength={255}
           onChange={(event) => setTodoText(event.target.value)}
           placeholder="해야할 일을 입력해요"
           value={todoText}
         />
         <button
-          className={'text-[13px] p-[14px]'}
+          className={'text-[13px] p-[14px] bg-[#333]'}
           disabled={!todoText.trim()}
           onClick={() => {
             void addTodo().then((didAddTodo) => {
