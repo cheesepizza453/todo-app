@@ -161,6 +161,7 @@ type HomePageProps = {
   onDeleteTodo: (todoId: string, dayIndex: number) => void;
   onNextStory: () => void;
   onOpenNotifications: () => void;
+  onOpenMemberFeed: (memberUid: string) => void;
   onOpenProfile: () => void;
   onOpenStory: (memberUid: string) => void;
   onPhotoChange: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -198,6 +199,44 @@ type CommentPanelProps = {
   onUpdateComment: HomePageProps["onUpdateComment"];
   userUid: string;
 };
+
+type MemberTopProps = {
+  member: Member;
+  subtitle: string;
+  onOpenMemberFeed: (memberUid: string) => void;
+};
+
+const MemberTop = ({
+  member,
+  onOpenMemberFeed,
+  subtitle,
+}: MemberTopProps) => (
+  <button
+    className="friend-top feed-member-button"
+    onClick={(event) => {
+      event.stopPropagation();
+      onOpenMemberFeed(member.uid);
+    }}
+    type="button"
+  >
+    {member.photoURL ? (
+      <figure className="relative w-[42px] h-[42px] overflow-hidden">
+        <img
+          className="w-full h-full object-cover"
+          src={member.photoURL}
+          alt=""
+        />
+      </figure>
+    ) : (
+      <div className="avatar-fallback">{member.name.slice(0, 1)}</div>
+    )}
+
+    <div className="gap-0">
+      <strong>{member.name}</strong>
+      <span className="text-[10px]">{subtitle}</span>
+    </div>
+  </button>
+);
 
 const CommentPanel = ({
   comments,
@@ -382,6 +421,7 @@ export const HomePage = ({
   onDeleteTodo,
   onNextStory,
   onOpenNotifications,
+  onOpenMemberFeed,
   onOpenProfile,
   onOpenStory,
   onPhotoChange,
@@ -401,7 +441,8 @@ export const HomePage = ({
   storyItems,
   todoText,
   user,
-}: HomePageProps) => (
+}: HomePageProps) => {
+  return (
   <main className="app-shell py-[20px]">
     <AppHeader
       likeCount={likeNotifications.length}
@@ -479,7 +520,6 @@ export const HomePage = ({
         const feedItems = [...photoFeedItems, ...todoFeedItems].sort(
           (firstItem, secondItem) => secondItem.timestamp - firstItem.timestamp
         );
-
         return (
           <article className="day-slide px-[15px] pb-[100px]">
             <div className="friend-feed mt-[10px]">
@@ -498,28 +538,11 @@ export const HomePage = ({
 
                     return (
                       <section className="friend-card p-[14px]" key={item.key}>
-                        <div className="friend-top">
-                          {item.member.photoURL ? (
-                            <figure className="relative w-[42px] h-[42px] overflow-hidden">
-                              <img
-                                className="w-full h-full object-cover"
-                                src={item.member.photoURL}
-                                alt=""
-                              />
-                            </figure>
-                          ) : (
-                            <div className="avatar-fallback">
-                              {item.member.name.slice(0, 1)}
-                            </div>
-                          )}
-
-                          <div className="gap-0">
-                            <strong>{item.member.name}</strong>
-                            <span className="text-[10px]">
-                              {formatShortDate(item.photo.createdAt)}
-                            </span>
-                          </div>
-                        </div>
+                        <MemberTop
+                          member={item.member}
+                          onOpenMemberFeed={onOpenMemberFeed}
+                          subtitle={formatShortDate(item.photo.createdAt)}
+                        />
 
                         <div className="photo-frame flex items-center justify-center w-full aspect-[4/3] rounded-[6px] overflow-hidden">
                           <img
@@ -577,33 +600,11 @@ export const HomePage = ({
                         className="relative friend-card todo-complete-card p-[14px] overflow-hidden bg-[#fdfbf4]"
                         key={item.key}
                       >
-                        <div className="friend-top">
-                          {item.member.photoURL ? (
-                            <figure className="relative w-[42px] h-[42px] overflow-hidden">
-                              <img
-                                className="w-full h-full object-cover"
-                                src={item.member.photoURL}
-                                alt=""
-                              />
-                            </figure>
-                          ) : (
-                            <div className="avatar-fallback">
-                              {item.member.name.slice(0, 1)}
-                            </div>
-                          )}
-
-                          <div className="gap-0">
-                            <strong>
-                              {item.member.name}
-                              <p className="inline ml-[2px] font-black text-green">
-                                님이 할 일을 해냈어요!
-                              </p>
-                            </strong>
-                            <span className="text-[10px]">
-                              {formatTodoPeriod(item.todo)}
-                            </span>
-                          </div>
-                        </div>
+                        <MemberTop
+                          member={item.member}
+                          onOpenMemberFeed={onOpenMemberFeed}
+                          subtitle={`${item.member.name}님이 할 일을 해냈어요! ${formatTodoPeriod(item.todo)}`}
+                        />
 
                         <p className="flex items-center">
                           <strong className="underline single-todo-row">
@@ -685,34 +686,11 @@ export const HomePage = ({
                             role="button"
                             tabIndex={0}
                           >
-                            <div className="friend-top">
-                              {item.member.photoURL ? (
-                                <figure className="relative w-[42px] h-[42px] overflow-hidden">
-                                  <img
-                                    className="w-full h-full object-cover"
-                                    src={item.member.photoURL}
-                                    alt=""
-                                  />
-                                </figure>
-                              ) : (
-                                <div className="avatar-fallback">
-                                  {item.member.name.slice(0, 1)}
-                                </div>
-                              )}
-
-                              <div className="gap-0">
-                                <strong>{item.member.name}</strong>
-                                <span
-                                  className={
-                                    item.todo.isDone
-                                      ? "text-[10px] text-white"
-                                      : "text-[10px] text-gray-500"
-                                  }
-                                >
-                                  {formatShortDate(item.todo.createdAt)}
-                                </span>
-                              </div>
-                            </div>
+                            <MemberTop
+                              member={item.member}
+                              onOpenMemberFeed={onOpenMemberFeed}
+                              subtitle={formatShortDate(item.todo.createdAt)}
+                            />
 
                             {editingTodoKey ===
                             `${item.entry.dayIndex}_${item.todo.id}` ? (
@@ -830,28 +808,11 @@ export const HomePage = ({
                       }`}
                       key={item.key}
                     >
-                      <div className="friend-top">
-                        {item.member.photoURL ? (
-                          <figure className="relative w-[42px] h-[42px] overflow-hidden">
-                            <img
-                              className="w-full h-full object-cover"
-                              src={item.member.photoURL}
-                              alt=""
-                            />
-                          </figure>
-                        ) : (
-                          <div className="avatar-fallback">
-                            {item.member.name.slice(0, 1)}
-                          </div>
-                        )}
-
-                        <div className="gap-0">
-                          <strong>{item.member.name}</strong>
-                          <span className="text-[10px]">
-                            {formatShortDate(item.todo.createdAt)}
-                          </span>
-                        </div>
-                      </div>
+                      <MemberTop
+                        member={item.member}
+                        onOpenMemberFeed={onOpenMemberFeed}
+                        subtitle={formatShortDate(item.todo.createdAt)}
+                      />
 
                       <div className="single-todo-row">
                         <span>{item.todo.text}</span>
@@ -917,4 +878,5 @@ export const HomePage = ({
 
     {message && <p className="toast">{message}</p>}
   </main>
-);
+  );
+};

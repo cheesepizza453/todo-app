@@ -19,6 +19,7 @@ import {
 import { auth, db } from "./firebase";
 import { AuthScreen, RoomLoadingScreen } from "./components/AppComponents";
 import { HomePage } from "./pages/HomePage";
+import { MemberFeedPage } from "./pages/MemberFeedPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 
@@ -700,8 +701,11 @@ function App() {
   const [nicknameText, setNicknameText] = useState("");
   const [activeDay, setActiveDay] = useState(() => getTodayIndex());
   const [activeProfileTab, setActiveProfileTab] = useState<ProfileTab>("todo");
+  const [activeMemberFeedTab, setActiveMemberFeedTab] =
+    useState<ProfileTab>("todo");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [selectedMemberFeedUid, setSelectedMemberFeedUid] = useState("");
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [editingTodoKey, setEditingTodoKey] = useState("");
   const [editingTodoText, setEditingTodoText] = useState("");
@@ -1805,6 +1809,68 @@ function App() {
       (firstPhoto, secondPhoto) =>
         secondPhoto.createdAt - firstPhoto.createdAt
     );
+  const selectedFeedMember = selectedMemberFeedUid
+    ? members.find((member) => member.uid === selectedMemberFeedUid)
+    : null;
+  const selectedMemberTodoGroups = Object.values(
+    entries
+      .filter(
+        (entry) => entry.uid === selectedMemberFeedUid && entry.todos.length
+      )
+      .flatMap((entry) =>
+        entry.todos.map((todo) => ({
+          dayIndex: entry.dayIndex,
+          sortTime: todo.completedAt ?? todo.createdAt,
+          todo,
+        }))
+      )
+      .reduce<
+        Record<
+          string,
+          {
+            key: string;
+            title: string;
+            sortTime: number;
+            todos: Array<{ dayIndex: number; todo: Todo }>;
+          }
+        >
+      >((groups, item) => {
+        const dateKey = toDateKey(new Date(item.sortTime));
+
+        groups[dateKey] ??= {
+          key: dateKey,
+          title: formatShortDate(item.sortTime),
+          sortTime: item.sortTime,
+          todos: [],
+        };
+
+        groups[dateKey].sortTime = Math.max(
+          groups[dateKey].sortTime,
+          item.sortTime
+        );
+        groups[dateKey].todos.push({
+          dayIndex: item.dayIndex,
+          todo: item.todo,
+        });
+
+        return groups;
+      }, {})
+  )
+    .map((group) => ({
+      ...group,
+      todos: group.todos.sort(
+        (firstItem, secondItem) =>
+          (secondItem.todo.completedAt ?? secondItem.todo.createdAt) -
+          (firstItem.todo.completedAt ?? firstItem.todo.createdAt)
+      ),
+    }))
+    .sort((firstGroup, secondGroup) => secondGroup.sortTime - firstGroup.sortTime);
+  const selectedMemberPhotoEntries = allPhotoPosts
+    .filter((photo) => photo.uid === selectedMemberFeedUid)
+    .sort(
+      (firstPhoto, secondPhoto) =>
+        secondPhoto.createdAt - firstPhoto.createdAt
+    );
   const likeNotifications = useMemo<LikeNotification[]>(() => {
     if (!user) return [];
 
@@ -1917,6 +1983,22 @@ function App() {
     );
   }
 
+  if (selectedFeedMember) {
+    return (
+      <MemberFeedPage
+        activeTab={activeMemberFeedTab}
+        formatDotDate={formatDotDate}
+        formatTodoPeriod={formatTodoPeriod}
+        likes={likes}
+        member={selectedFeedMember}
+        onBack={() => setSelectedMemberFeedUid("")}
+        photoEntries={selectedMemberPhotoEntries}
+        setActiveTab={setActiveMemberFeedTab}
+        todoGroups={selectedMemberTodoGroups}
+      />
+    );
+  }
+
   if (isNotificationsOpen) {
     return (
       <NotificationsPage
@@ -1956,6 +2038,10 @@ function App() {
       onDeleteComment={deleteComment}
       onDeleteTodo={deleteTodo}
       onNextStory={showNextStory}
+      onOpenMemberFeed={(memberUid) => {
+        setActiveMemberFeedTab("todo");
+        setSelectedMemberFeedUid(memberUid);
+      }}
       onOpenNotifications={() => setIsNotificationsOpen(true)}
       onOpenProfile={() => setIsProfileOpen(true)}
       onOpenStory={openStory}
