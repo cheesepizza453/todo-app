@@ -1348,8 +1348,9 @@ function App() {
                             >
                               <div className="profile-todo-swipe">
                                 {isEditingTodo ? (
-                                  <div className="profile-edit-row">
+                                  <div className="profile-edit-row relative flex justify-start">
                                     <input
+                                      className={'w-[55vw]'}
                                       autoFocus
                                       maxLength={255}
                                       onChange={(event) =>
@@ -1358,6 +1359,7 @@ function App() {
                                       value={editingTodoText}
                                     />
                                     <button
+                                      className={'w-[45px]'}
                                       disabled={!editingTodoText.trim()}
                                       onClick={() =>
                                         updateTodoText(todo.id, dayIndex)
@@ -1367,6 +1369,7 @@ function App() {
                                       저장
                                     </button>
                                     <button
+                                      className={'w-[45px]'}
                                       onClick={() => {
                                         setEditingTodoKey("");
                                         setEditingTodoText("");
@@ -1539,7 +1542,7 @@ function App() {
   if (isNotificationsOpen) {
     return (
       <main className="profile-screen">
-        <header className="profile-header">
+        <header className="profile-header fixed top-0 left-0">
           <button
             className=""
             onClick={() => setIsNotificationsOpen(false)}
@@ -1575,7 +1578,7 @@ function App() {
 
   return (
     <main className="app-shell py-[20px]">
-      <header className="room-header pt-[4px] px-[18px] pb-[16px]">
+      <header className="room-header fixed top-0 left-0 py-[20px] w-full bg-white px-[18px] pb-[16px] z-20 border-b border-[#e3dfd6]">
         <div className="w-full flex items-center justify-between header-icon-actions">
           <button
             className="profile-icon-button"
@@ -1603,6 +1606,8 @@ function App() {
 
         </div>
       </header>
+      <div className={'w-full h-[80px]'}></div>
+
 
       {storyGroups.length > 0 && (
         <section className="story-rail px-[18px] pb-[14px]" aria-label="스토리">

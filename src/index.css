@@ -533,18 +533,20 @@ button:disabled,
   font-size: 12px;
 }
 
+
 .profile-edit-row {
   display: grid;
   grid-template-columns: 1fr auto auto;
   gap: 6px;
   width: 100%;
   min-width: 100%;
-  background: var(--paper);
-  padding: 7px;
+  background: transparent;
+  padding: 12px 14px;
+  position: relative;
 }
 
 .profile-edit-row input {
-  min-height: 34px;
+  min-height: 42px;
 }
 
 .profile-edit-row button,
