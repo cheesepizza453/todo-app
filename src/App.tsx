@@ -25,6 +25,7 @@ import {PlusIcon} from "./assets/icon/PlusIcon.tsx";
 import {TodoIcon} from "./assets/icon/TodoIcon.tsx";
 import {MyIcon} from "./assets/icon/MyIcon.tsx";
 import {BackIcon} from "./assets/icon/BackIcon.tsx";
+import {PencilIcon} from "./assets/icon/PencilIcon.tsx";
 
 const MAX_MEMBERS = 7;
 const STORAGE_KEY = "study-room-code";
@@ -397,6 +398,7 @@ function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [activeStoryUid, setActiveStoryUid] = useState<string | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
   const [isSavingProfilePhoto, setIsSavingProfilePhoto] = useState(false);
@@ -411,7 +413,7 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+       setUser(currentUser);
 
       if (!currentUser) return;
 
@@ -567,6 +569,7 @@ function App() {
 
       setNicknameText("");
       setMessage("닉네임을 바꿨어요.");
+      setIsEditingNickname(false);
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "닉네임 변경에 실패했어요."
@@ -595,7 +598,7 @@ function App() {
         });
       });
 
-      setMessage("프로필 사진을 바꿨어요.");
+      setMessage("프로필 사진을 바꿨어요!");
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -952,17 +955,19 @@ function App() {
 
   if (!user) {
     return (
-      <main className="bg-[#f5f7f8] text-center w-[100vw] h-[100vh] flex justify-center items-center">
-        <div className="flex flex-col justify-between items-center">
-          <p className={'text-[45px] text-center text-black font-bold leading-[1.1]'}>미리친구들<br/>생존신고방️</p>
+      <main className="relative bg-[#fdfbf4] text-center w-[100vw] h-[80vh]  flex justify-center items-start pt-[90px] px-[30px]">
+        <div className="flex flex-col justify-center items-center pb-[300px]">
+          <p className={' text-[32px] text-center text-[#343333] font-bold leading-[1.4]'}>소소하게 갓생 응원하고<br/>뭐 먹었는지 공유해요</p>
           <section className="mt-[6px] w-full">
-            <p className={' text-[12px]'}>
-              뭐먹었는지 자랑하고 갓생 응원하는 방
-            </p>
-            <button className="rounded-[14px] w-full mt-[30px] px-[25px] py-[15px] bg-[#3f79eb] text-white font-regural"
+            <figure className={'mt-50px] max-w-[700px]'}>
+              <img src={'./src/assets/main-1.jpg'} alt={'오리'}/>
+            </figure>
+            <div className={'absolute bottom-[30px] left-0 w-full overflow-hidden'}>
+            <button className="rounded-[6px] w-[calc(100%-60px)] max-w-[800px] py-[15px] bg-[#333333] text-white font-normal"
                     onClick={login}>
               구글로 시작해줘
             </button>
+            </div>
           </section>
         </div>
       </main>
@@ -1012,54 +1017,80 @@ function App() {
         </header>
 
         <section className="profile-panel">
-          <div className="profile-photo-preview">
-            {myMember?.photoURL ? (
-              <img src={myMember.photoURL} alt="" />
-            ) : (
-              <span>{myMember?.name.slice(0, 1) ?? "나"}</span>
-            )}
+          <div className={'relative'}>
+            <div className="profile-photo-preview">
+              {myMember?.photoURL ? (
+                <img src={myMember.photoURL} alt=""/>
+              ) : (
+                <span>{myMember?.name.slice(0, 1) ?? "나"}</span>
+              )}
+            </div>
+            <label className="absolute bottom-0 right-0 profile-photo-button rounded-full p-0 w-[30px] h-[30px] min-h-[30px]">
+              <input
+                accept="image/*"
+                disabled={isSavingProfilePhoto}
+                onChange={updateProfilePhoto}
+                type="file"
+              />
+              {isSavingProfilePhoto ? "저장 중" : <PencilIcon size={25}/>}
+            </label>
           </div>
 
-          <label className="profile-photo-button">
-            <input
-              accept="image/*"
-              disabled={isSavingProfilePhoto}
-              onChange={updateProfilePhoto}
-              type="file"
-            />
-            {isSavingProfilePhoto ? "저장 중" : "프로필 사진 바꾸기"}
-          </label>
 
-          <form className="profile-nickname-form" onSubmit={updateNickname}>
-            <label>
-              닉네임
-              <input
-                disabled={!canChangeNickname}
-                maxLength={12}
-                onChange={(event) => setNicknameText(event.target.value)}
-                placeholder={
-                  canChangeNickname
-                    ? `${myMember?.name ?? "내"} 닉네임 바꾸기`
-                    : myMember?.name ?? ""
-                }
-                value={nicknameText}
-              />
-            </label>
-            <button
-              disabled={!canChangeNickname || !nicknameText.trim()}
-              type="submit"
-            >
-              저장
-            </button>
-            {!canChangeNickname && (
-              <p className="profile-note">닉네임은 이미 한 번 바꿨어요.</p>
-            )}
-          </form>
+          {canChangeNickname && isEditingNickname ? (
+            <form className="profile-nickname-form flex justify-center gap-1" onSubmit={updateNickname}>
+              <label>
+                <input
+                  autoFocus
+                  disabled={!canChangeNickname}
+                  maxLength={12}
+                  onChange={(event) => setNicknameText(event.target.value)}
+                  placeholder={myMember?.name ?? "닉네임"}
+                  value={nicknameText}
+                />
+              </label>
+              <button
+                className={'px-[15px] bg-transparent text-[#333333] text-[12px]'}
+                disabled={!nicknameText.trim()}
+                type="submit"
+              >
+                저장
+              </button>
+              <button
+                className={'px-[15px] bg-transparent text-[#333333] text-[12px]'}
+                onClick={() => {
+                  setNicknameText("");
+                  setIsEditingNickname(false);
+                }}
+                type="button"
+              >
+                취소
+              </button>
+            </form>
+          ) : (
+            <div className="profile-nickname-view flex items-center gap-[5px]">
+              <strong>{myMember?.name}</strong>
+
+              {canChangeNickname ? (
+                <button
+                  className={'min-h-0 text-[12px]'}
+                  onClick={() => {
+                    setNicknameText(myMember?.name ?? "");
+                    setIsEditingNickname(true);
+                  }}
+                  type="button"
+                >
+                  수정
+                </button>
+              ) : (
+               ''
+              )}
+            </div>
+          )}
 
           <section className="profile-todo-panel">
             <div>
               <strong>내 할 일</strong>
-              <span>여기서 확인하면 피드에 완료 기록이 올라가요.</span>
             </div>
 
             {myTodoGroups.length ? (
@@ -1323,7 +1354,7 @@ function App() {
                             onClick={() => togglePhotoLike(item.entry)}
                             type="button"
                           >
-                            <HeartIcon filled={togglePhotoLike.length > 0}/> {photoLikes.length}
+                            <HeartIcon className={'mt-[1px]'} filled={photoLikes.length > 0}/> <span className={'text-[#333333]'}>{photoLikes.length}</span>
                           </button>
                         </section>
                       );
@@ -1343,7 +1374,7 @@ function App() {
                     if (item.type === "todoDone") {
                       return (
                         <section
-                          className="friend-card todo-complete-card"
+                          className="relative friend-card todo-complete-card overflow-hidden"
                           key={item.key}
                         >
                           <div className="friend-top">
@@ -1355,14 +1386,15 @@ function App() {
                               </div>
                             )}
 
-                            <div>
-                              <strong>{item.member.name}</strong>
-                              <span>{formatHour(item.todo.completedAt)}</span>
+                            <div className={'gap-0'}>
+                              <strong>{item.member.name}<p className={'inline ml-[2px] font-black text-green'}>님이 할 일을
+                                해냈어요!</p></strong>
+                              <span className={'text-[10px]'}>{formatHour(item.todo.completedAt)}</span>
                             </div>
                           </div>
 
-                          <p>
-                            <strong>{item.todo.text}</strong> 다했다!
+                          <p className={'flex items-center'}>
+                            <strong className={'underline'}>{item.todo.text}</strong>
                           </p>
                           <button
                             className={`flex gap-[2px] ${
@@ -1371,8 +1403,11 @@ function App() {
                             onClick={() => toggleTodoLike(item.entry, item.todo.id)}
                             type="button"
                           >
-                            <HeartIcon filled={todoLikes.length > 0}/> {todoLikes.length}
+                            <HeartIcon className={'mt-[1px]'} filled={todoLikes.length > 0}/> <span className={'text-[#333333]'}>{todoLikes.length}</span>
                           </button>
+                          <figure className={'absolute bottom-[-30px] right-[-20px] w-[170px] inline-block opacity-45'}>
+                            <img className={'w-full'} src={'./src/assets/stamp.png'} alt='스탬프'/>
+                          </figure>
                         </section>
                       );
                     }
@@ -1431,7 +1466,7 @@ function App() {
                           onClick={() => toggleTodoLike(item.entry, item.todo.id)}
                           type="button"
                         >
-                          <HeartIcon filled={todoLikes.length > 0} /> {todoLikes.length}
+                          <HeartIcon className={'mt-[1px]'}  filled={todoLikes.length > 0} /> <span className={'text-[#333333]'}>{todoLikes.length}</span>
                         </button>
 
 
@@ -1512,50 +1547,51 @@ function App() {
             className="add-modal"
             role="dialog"
           >
-            <div className="add-modal-header">
+            <div className="flex justify-between items-center">
               <div>
-                <strong>오늘 기록 추가</strong>
-                <span>할 일과 사진은 오늘 날짜에 저장됩니다.</span>
+                <strong className={'text-[20px]'}>나누고 싶은 일을 추가해요</strong>
               </div>
               <button
-                className="ghost-button"
+                className="min-h-[35px] text-[13px] text-[#333333]"
                 onClick={() => setIsAddOpen(false)}
                 type="button"
               >
-                닫기
+                취소
               </button>
             </div>
 
-            <div className="todo-input">
+            <div className="todo-input mt-[10px]">
               <input
                 autoFocus
+                maxLength={255}
                 value={todoText}
                 onChange={(event) => setTodoText(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") addTodo();
                 }}
-                placeholder="오늘 할 일"
+                placeholder="뭘 해볼까요?"
               />
+            </div>
+            <div className={'flex justify-between items-center mt-[10px]'}>
+              <label className="photo-button">
+                <input
+                  accept="image/*"
+                  disabled={isSavingPhoto}
+                  onChange={uploadPhoto}
+                  type="file"
+                />
+                {isSavingPhoto ? "압축 중" : <PhotoIcon size={35}/>}
+              </label>
               <button
-                className="icon-button"
+                className="text-[14px] bg-[#333333] text-white px-[30px] rounded-[6px]"
                 onClick={addTodo}
                 disabled={!todoText.trim()}
                 type="button"
                 title="할 일 추가"
               >
-                +
+                게시
               </button>
             </div>
-
-            <label className="photo-button">
-              <input
-                accept="image/*"
-                disabled={isSavingPhoto}
-                onChange={uploadPhoto}
-                type="file"
-              />
-              {isSavingPhoto ? "압축 중" : "사진 올리기"}
-            </label>
           </section>
         </div>
       )}
@@ -1566,7 +1602,7 @@ function App() {
           onClick={() => setActiveFeedView("all")}
           type="button"
         >
-          <HomeIcon size={35}/>
+        <HomeIcon size={35}/>
         </button>
         <button
           className={activeFeedView === "photo" ? "active" : ""}

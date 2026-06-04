@@ -29,7 +29,7 @@
   gap: 22px;
   max-width: 620px;
   padding: 34px;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .auth-panel h1,
@@ -74,7 +74,7 @@
   display: grid;
   gap: 18px;
   padding: 22px;
-  border-radius: 8px;
+  border-radius: 6px;
   text-align: left;
 }
 
@@ -94,7 +94,7 @@ input {
   min-height: 44px;
   box-sizing: border-box;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--surface);
   color: var(--text-strong);
   font: inherit;
@@ -103,18 +103,17 @@ input {
 }
 
 input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--black);
 }
 
 button,
 .photo-button {
   min-height: 42px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   font: inherit;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 button:disabled,
@@ -231,7 +230,7 @@ button:disabled,
   gap: 18px;
   border: 1px solid var(--border);
   background: var(--surface);
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: var(--shadow);
   padding: 24px;
 }
@@ -239,8 +238,8 @@ button:disabled,
 .profile-photo-preview {
   display: grid;
   place-items: center;
-  width: 112px;
-  height: 112px;
+  width: 90px;
+  height: 90px;
   border-radius: 50%;
   background: var(--mint);
   color: var(--mint-text);
@@ -262,13 +261,13 @@ button:disabled,
   display: grid;
   place-items: center;
   min-height: 42px;
-  border-radius: 8px;
-  background: var(--accent);
+  border-radius: 6px;
+  background: var(--black);
   color: var(--surface);
   cursor: pointer;
   font-size: 14px;
-  font-weight: 800;
-  padding: 0 16px;
+  font-weight: 500;
+  padding: 10px 20px;
 }
 
 .profile-photo-button input {
@@ -283,7 +282,7 @@ button:disabled,
 
 .profile-nickname-form button {
   min-height: 42px;
-  background: var(--accent);
+  background: var(--black);
   color: var(--surface);
   font-size: 14px;
 }
@@ -343,7 +342,7 @@ button:disabled,
   gap: 8px;
   align-items: start;
   min-height: 42px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--paper);
   padding: 7px 10px;
 }
@@ -381,7 +380,7 @@ button:disabled,
   align-items: center;
   border: 1px solid var(--border);
   background: var(--surface);
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: var(--shadow);
   padding: 12px;
 }
@@ -652,7 +651,7 @@ button:disabled,
   grid-template-columns: 1fr;
   gap: 12px;
   padding: 14px;
-  border-radius: 8px;
+  border-radius: 6px;
   margin-bottom: 14px;
 }
 
@@ -666,7 +665,6 @@ button:disabled,
 
 .todo-input {
   display: grid;
-  grid-template-columns: 1fr 44px;
   gap: 8px;
 }
 
@@ -681,10 +679,8 @@ button:disabled,
   display: grid;
   place-items: center;
   width: fit-content;
-  min-width: 128px;
-  background: var(--mint);
-  color: var(--mint-text);
-  padding: 0 14px;
+  color: var(--black);
+  padding: 0 6px;
 }
 
 .photo-button input {
@@ -701,7 +697,7 @@ button:disabled,
   display: grid;
   gap: 12px;
   padding: 14px;
-  border-radius: 8px;
+  border-radius: 6px;
   text-align: left;
 }
 
@@ -732,7 +728,7 @@ button:disabled,
 .photo-placeholder {
   width: 100%;
   aspect-ratio: 4 / 3;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .photo-frame {
@@ -777,7 +773,7 @@ button:disabled,
   gap: 8px;
   align-items: center;
   min-height: 54px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--paper);
   padding: 8px 4px 8px 8px;
 }
@@ -801,15 +797,7 @@ button:disabled,
   font-size: 20px;
 }
 
-.todo-complete-card {
-  background: var(--mint);
-}
 
-.todo-complete-card p {
-  color: var(--mint-text);
-  font-size: 16px;
-  font-weight: 800;
-}
 
 .like-button {
   justify-self: start;
@@ -891,7 +879,7 @@ button:disabled,
   gap: 14px;
   width: min(100%, 520px);
   margin: 0 auto;
-  border-radius: 14px;
+  border-radius: 6px;
   background: var(--surface);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
   padding: 18px;
@@ -960,5 +948,9 @@ button:disabled,
 
   .text-blue {
     color: var(--accent);
+  }
+
+  .text-green {
+    color: var(--mint-text);
   }
 }
