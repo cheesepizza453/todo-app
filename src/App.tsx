@@ -1185,7 +1185,7 @@ function App() {
           <p className={' text-[32px] text-center text-[#343333] font-bold leading-[1.4]'}>소소하게 갓생 응원하고<br/>뭐 먹었는지 공유해요</p>
           <section className="mt-[6px] w-full">
             <figure className={'mt-50px] max-w-[700px]'}>
-              <img src={'./src/assets/main-1.jpg'} alt={'오리'}/>
+              <img src={'/main-1.jpg'} alt={'오리'}/>
             </figure>
             <div className={'absolute bottom-[30px] left-0 w-full overflow-hidden'}>
             <button className="rounded-[6px] w-[calc(100%-60px)] max-w-[800px] py-[15px] bg-[#333333] text-white font-normal"

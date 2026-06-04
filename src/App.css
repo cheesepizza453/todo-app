@@ -141,7 +141,7 @@ button:disabled,
 .app-shell {
   display: grid;
   grid-template-rows: auto auto 1fr;
-  padding: 18px 0 calc(92px + env(safe-area-inset-bottom));
+  padding: 20px 0;
 }
 
 .room-header {
@@ -171,6 +171,7 @@ button:disabled,
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .profile-icon-button span {
@@ -890,7 +891,7 @@ button:disabled,
   flex: 0 0 100%;
   scroll-snap-align: start;
   box-sizing: border-box;
-  padding: 0 18px;
+  padding: 0 15px;
 }
 
 .day-title {
@@ -1122,31 +1123,6 @@ button:disabled,
   padding: 9px 14px;
 }
 
-@media (max-width: 640px) {
-  .auth-screen,
-  .room-screen {
-    padding: 18px;
-  }
-
-  .auth-panel {
-    padding: 24px;
-  }
-
-  .room-header {
-    align-items: start;
-    flex-direction: column;
-  }
-
-  .day-title {
-    align-items: start;
-    flex-direction: column;
-  }
-
-  .day-title div {
-    align-items: start;
-    flex-direction: column;
-  }
-}
   .bg-blue {
     background-color: var(--accent);
   }
