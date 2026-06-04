@@ -66,9 +66,7 @@
   ol {
     list-style: none;
   }
-}
 
-@layer base {
   :root {
     --surface: #ffffff;
     --paper: #fdfbf4;

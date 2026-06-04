@@ -1573,7 +1573,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell py-[20px]">
       <header className="room-header">
         <div className="w-full flex items-center justify-between header-icon-actions">
           <button
