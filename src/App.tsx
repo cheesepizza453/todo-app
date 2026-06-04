@@ -1517,7 +1517,7 @@ function App() {
             value={todoText}
           />
           <button
-            className={'text-[13px]  py-[14px] px-[20px] bg-[#333]'}
+            className={'text-[13px]  py-[14px] px-[20px] bg-[#333] text-white'}
             disabled={!todoText.trim()}
             onClick={() => {
               void addTodo().then((didAddTodo) => {
@@ -2094,7 +2094,7 @@ function App() {
           value={todoText}
         />
         <button
-          className={'text-[13px] py-[14px] px-[20px] bg-[#333]'}
+          className={'text-[13px] py-[14px] px-[20px] bg-[#333] text-white'}
           disabled={!todoText.trim()}
           onClick={() => {
             void addTodo().then((didAddTodo) => {

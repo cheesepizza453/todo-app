@@ -566,7 +566,6 @@ button:disabled,
 
 .profile-composer button {
   background: var(--black);
-  color: var(--surface);
   font-size: 13px;
   padding: 0 15px;
 }
