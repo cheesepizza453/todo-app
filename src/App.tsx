@@ -1435,7 +1435,7 @@ function App() {
               ) : (
                 <div className={'my-[60px]'}>
                   <figure>
-                    <img src={"./src/assets/empty.png"}/>
+                    <img src={"/empty.png"}/>
                   </figure>
                 <p className="empty-note">아직 등록한 할 일이 없어요.<br/>아래에서 작성해 보세요!</p>
                 </div>
@@ -1491,7 +1491,7 @@ function App() {
             ) : (
               <div className={'my-[60px]'}>
                 <figure>
-                  <img src={"./src/assets/empty.png"}/>
+                  <img src={"/empty.png"}/>
                 </figure>
                 <p className="empty-note">아직 등록한 밥짤이 없어요.<br/>아래 왼쪽 버튼을 눌러 올려보세요!</p>
               </div>
@@ -1799,7 +1799,7 @@ function App() {
                             <HeartIcon className={'mt-[1px]'} filled={todoLikes.length > 0}/> <span className={'text-[#333333]'}>{todoLikes.length}</span>
                           </button>
                           <figure className={'absolute bottom-[-30px] right-[-20px] w-[170px] inline-block opacity-45'}>
-                            <img className={'w-full'} src={'./src/assets/stamp.png'} alt='스탬프'/>
+                            <img className={'w-full'} src={'/stamp.png'} alt='스탬프'/>
                           </figure>
                         </section>
                       );
