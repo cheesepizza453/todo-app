@@ -7,7 +7,7 @@
   width: min(100%, 860px);
   margin: 0 auto;
   box-sizing: border-box;
-  background: var(--paper);
+  background: var(--surface);
 }
 
 .auth-screen,
@@ -373,12 +373,14 @@ button:disabled,
   flex: 0 0 calc(100% - 116px);
   min-height: 58px;
   scroll-snap-align: start;
-  border-radius: 6px;
-  background: var(--paper);
   color: var(--text-strong);
   text-align: left;
-  padding: 12px 14px;
+  padding: 8px 4px;
 }
+
+  .profile-todo-block.my-todo-block {
+    padding: 12px 14px;
+  }
 
 .profile-manage-panel li.done .profile-todo-block {
   background: var(--mint-text);
@@ -442,7 +444,7 @@ button:disabled,
 }
 
 .profile-edit-row input {
-  min-height: 36px;
+  min-height: 34px;
 }
 
 .profile-edit-row button,

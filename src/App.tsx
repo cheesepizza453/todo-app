@@ -1327,7 +1327,7 @@ function App() {
                 onClick={() => setActiveProfileTab("photo")}
                 type="button"
               >
-                포토
+                내 밥
               </button>
             </div>
 
@@ -1380,7 +1380,7 @@ function App() {
                                 ) : (
                                   <>
                                     <button
-                                      className="profile-todo-block"
+                                      className="profile-todo-block my-todo-block"
                                       onClick={() => {
                                         const nextIsDone = !todo.isDone;
                                         void updateTodo(
@@ -1493,7 +1493,7 @@ function App() {
                 <figure>
                   <img src={"./src/assets/empty.png"}/>
                 </figure>
-                <p className="empty-note">아직 등록한 사진이 없어요.<br/>아래 왼쪽 버튼을 눌러 올려보세요!</p>
+                <p className="empty-note">아직 등록한 밥짤이 없어요.<br/>아래 왼쪽 버튼을 눌러 올려보세요!</p>
               </div>
             )}
           </section>
@@ -1857,7 +1857,7 @@ function App() {
 
                                 <div className={'gap-0'}>
                                   <strong>{item.member.name}</strong>
-                                  <span className={'text-[10px]'}>{formatShortDate(item.todo.createdAt)}</span>
+                                  <span className={item.todo.isDone ?'text-[10px] text-white' : 'text-[10px] text-gray-500'}>{formatShortDate(item.todo.createdAt)}</span>
                                 </div>
                               </div>
 
@@ -1901,9 +1901,6 @@ function App() {
                               ) : (
                                 <div className="profile-todo-block">
                                   <span className={'text-[15px]'}>{item.todo.text}</span>
-                                  <time className={'text-[10px]'}>
-                                    {formatTodoPeriod(item.todo)}
-                                  </time>
                                 </div>
                               )}
                               <button
@@ -1916,7 +1913,7 @@ function App() {
                                 }}
                                 type="button"
                               >
-                                <HeartIcon className={'mt-[1px]'}  filled={todoLikes.length > 0} /> <span className={'text-[#333333]'}>{todoLikes.length}</span>
+                                <HeartIcon className={'mt-[1px]'}  filled={todoLikes.length > 0} /> <span className={item.todo.isDone ?'text-[#ffffff]':'text-[#333333]'}>{todoLikes.length}</span>
                               </button>
                             </article>
                             <div className="profile-item-actions">
