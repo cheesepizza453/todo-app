@@ -1499,7 +1499,7 @@ function App() {
         </section>
 
         <form className="profile-composer fixed gap-x-[10px] w-full flex items-center justify-between left-1/2 bottom-0 z-[18] -translate-x-1/2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] backdrop-blur-[14px] px-[14px] py-[16px]" onSubmit={addTodoFromProfile}>
-          <label className="profile-composer-photo-button flex items-center justify-center py-[7px]">
+          <label className="profile-composer-photo-button flex items-center justify-center py-[7px] shrink-0">
             <input
               accept="image/*"
               disabled={isSavingPhoto}
@@ -1516,7 +1516,7 @@ function App() {
             value={todoText}
           />
           <button
-            className={'text-[13px]  py-[14px] px-[20px] bg-[#333] text-white'}
+            className={'text-[13px]  py-[14px] px-[20px] bg-[#333] text-white shrink-0'}
             disabled={!todoText.trim()}
             onClick={() => {
               void addTodo().then((didAddTodo) => {
@@ -2076,7 +2076,7 @@ function App() {
       )}
 
       <form className="profile-composer fixed gap-x-[10px] w-full flex items-center justify-between left-1/2 bottom-0 z-[18] -translate-x-1/2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] backdrop-blur-[14px] px-[14px] py-[16px]" onSubmit={addTodoFromProfile}>
-        <label className="profile-composer-photo-button flex items-center justify-center py-[7px]">
+        <label className="profile-composer-photo-button flex items-center justify-center py-[7px] shrink-0">
           <input
             accept="image/*"
             disabled={isSavingPhoto}
@@ -2093,7 +2093,7 @@ function App() {
           value={todoText}
         />
         <button
-          className={'text-[13px] py-[14px] px-[20px] bg-[#333] text-white'}
+          className={'text-[13px] py-[14px] px-[20px] bg-[#333] text-white shrink-0'}
           disabled={!todoText.trim()}
           onClick={() => {
             void addTodo().then((didAddTodo) => {
