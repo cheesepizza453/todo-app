@@ -65,7 +65,12 @@ export const NotificationsScreen = ({
           </article>
         ))
       ) : (
+        <div className="mt-[70px]">
+          <figure>
+            <img src={'/empty.png'} alt="" />
+          </figure>
         <p className="empty-note">아직 받은 좋아요가 없어요.</p>
+        </div>
       )}
     </section>
   </main>
