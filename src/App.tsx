@@ -1732,9 +1732,9 @@ function App() {
                             </div>
                           </div>
 
-                          <div className="photo-frame">
+                          <div className="photo-frame flex items-center justify-center w-full aspect-[4/3] rounded-[6px] overflow-hidden">
                             <img
-                              className="daily-photo"
+                              className="daily-photo w-full h-full object-cover"
                               src={item.photo.dataUrl}
                               alt={`${item.member.name}의 하루 사진`}
                             />
