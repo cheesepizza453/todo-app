@@ -1742,7 +1742,7 @@ function App() {
 
                           <button
                             className={`flex gap-[2px] ${
-                              hasLikedPhoto ? "active text-blue" : ""
+                              hasLikedPhoto ? "active text-[#4cb46e]" : ""
                             }`}
                             onClick={() => togglePhotoLike(item.photo)}
                             type="button"
@@ -1795,7 +1795,7 @@ function App() {
                           </p>
                           <button
                             className={`flex gap-[2px] ${
-                              hasLikedTodo ? "active text-blue" : ""
+                              hasLikedTodo ? "active text-[#4cb46e]" : ""
                             }`}
                             onClick={() => toggleTodoLike(item.entry, item.todo.id)}
                             type="button"
@@ -1911,7 +1911,7 @@ function App() {
                               )}
                               <button
                                 className={`flex gap-[2px] ${
-                                  hasLikedTodo ? "active text-blue" : ""
+                                  hasLikedTodo ? "active text-[#4cb46e]" : ""
                                 }`}
                                 onClick={(event) => {
                                   event.stopPropagation();
@@ -1982,7 +1982,7 @@ function App() {
                         </div>
                         <button
                           className={`flex gap-[2px] ${
-                            hasLikedTodo ? "active text-blue" : ""
+                            hasLikedTodo ? "active text-[#4cb46e]" : ""
                           }`}
                           onClick={() => toggleTodoLike(item.entry, item.todo.id)}
                           type="button"
