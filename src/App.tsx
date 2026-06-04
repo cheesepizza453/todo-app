@@ -1712,7 +1712,7 @@ function App() {
                       );
 
                       return (
-                        <section className="friend-card" key={item.key}>
+                        <section className="friend-card p-[14px]" key={item.key}>
                           <div className="friend-top">
                             {item.member.photoURL ? (
                               <figure className={'relative w-[42px] h-[42px] overflow-hidden'}>
@@ -1767,7 +1767,7 @@ function App() {
                     if (item.type === "todoDone") {
                       return (
                         <section
-                          className="relative friend-card todo-complete-card overflow-hidden bg-[#fdfbf4]"
+                          className="relative friend-card todo-complete-card p-[14px] overflow-hidden bg-[#fdfbf4]"
                           key={item.key}
                         >
                           <div className="friend-top">
@@ -1819,7 +1819,7 @@ function App() {
                         >
                           <div className="feed-todo-swipe">
                             <article
-                              className="friend-card feed-todo-card-body"
+                              className="friend-card feed-todo-card-body p-[14px]"
                               onClick={() => {
                                 if (
                                   editingTodoKey ===
@@ -1955,7 +1955,7 @@ function App() {
 
                     return (
                       <section
-                        className={`friend-card todo-feed-card ${
+                        className={`friend-card todo-feed-card p-[14px] ${
                           item.todo.isDone ? "done" : ""
                         }`}
                         key={item.key}
