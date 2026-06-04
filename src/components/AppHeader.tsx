@@ -40,7 +40,7 @@ export const AppHeader = ({
       >
         <HeartIcon size={30} color="black" />
         {likeCount > 0 && (
-          <span className="flex justify-center items-center absolute bottom-[22px] right-[-4px] rounded-full w-[16px] h-[16px] text-white bg-blue">
+          <span className="flex justify-center items-center absolute bottom-[22px] right-[-4px] rounded-full w-auto min-w-[16px] h-[16px] text-white bg-blue">
             {likeCount}
           </span>
         )}

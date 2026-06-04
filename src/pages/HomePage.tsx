@@ -201,12 +201,14 @@ type CommentPanelProps = {
 };
 
 type MemberTopProps = {
+  actionText?: string;
   member: Member;
   subtitle: string;
   onOpenMemberFeed: (memberUid: string) => void;
 };
 
 const MemberTop = ({
+  actionText,
   member,
   onOpenMemberFeed,
   subtitle,
@@ -232,7 +234,14 @@ const MemberTop = ({
     )}
 
     <div className="gap-0">
-      <strong>{member.name}</strong>
+      <strong>
+        {member.name}
+        {actionText && (
+          <p className="inline ml-[2px] font-black text-green">
+            {actionText}
+          </p>
+        )}
+      </strong>
       <span className="text-[10px]">{subtitle}</span>
     </div>
   </button>
@@ -601,9 +610,10 @@ export const HomePage = ({
                         key={item.key}
                       >
                         <MemberTop
+                          actionText="님이 할 일을 해냈어요!"
                           member={item.member}
                           onOpenMemberFeed={onOpenMemberFeed}
-                          subtitle={`${item.member.name}님이 할 일을 해냈어요! ${formatTodoPeriod(item.todo)}`}
+                          subtitle={formatTodoPeriod(item.todo)}
                         />
 
                         <p className="flex items-center">
