@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import type { User } from "firebase/auth";
 import {
   GoogleAuthProvider,
@@ -8,6 +8,7 @@ import {
 } from "firebase/auth";
 import {
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   query,
@@ -20,9 +21,19 @@ import { auth, db } from "./firebase";
 
 const MAX_MEMBERS = 7;
 const STORAGE_KEY = "study-room-code";
-const PHOTO_SIZE_LIMIT = 680 * 1024;
+const PHOTO_SIZE_LIMIT = 620_000;
 const MAIN_ROOM_CODE = "MAIN";
 const MAIN_ROOM_NAME = "뭐해";
+const WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
+const WEEKDAY_FULL_LABELS = [
+  "월요일",
+  "화요일",
+  "수요일",
+  "목요일",
+  "금요일",
+  "토요일",
+  "일요일",
+];
 
 const getTimestamp = () => new Date().getTime();
 
@@ -31,6 +42,7 @@ type Member = {
   name: string;
   photoURL: string;
   joinedAt: number;
+  nameChangedAt?: number;
 };
 
 type Room = {
@@ -47,6 +59,8 @@ type Todo = {
   text: string;
   isDone: boolean;
   createdAt: number;
+  completedAt?: number | null;
+  likes?: Record<string, Like>;
 };
 
 type Entry = {
@@ -59,18 +73,87 @@ type Entry = {
   todos: Todo[];
   photoDataUrl: string;
   photoUpdatedAt: number | null;
+  photoLikes?: Record<string, Like>;
   updatedAt: number;
+};
+
+type Like = {
+  uid: string;
+  name: string;
+  photoURL: string;
+  createdAt: number;
 };
 
 type Day = {
   date: Date;
   label: string;
   shortLabel: string;
+  title: string;
   key: string;
   isToday: boolean;
 };
 
-type FeedView = "photo" | "todo";
+type FeedView = "all" | "photo" | "todo";
+
+type FeedItem =
+  | {
+      type: "photo";
+      key: string;
+      member: Member;
+      entry: Entry;
+      timestamp: number;
+    }
+  | {
+      type: "todo";
+      key: string;
+      member: Member;
+      entry: Entry;
+      todo: Todo;
+      timestamp: number;
+    }
+  | {
+      type: "todoDone";
+      key: string;
+      member: Member;
+      entry: Entry;
+      todo: Todo;
+      timestamp: number;
+    };
+
+type LikeNotification = {
+  id: string;
+  fromName: string;
+  fromPhotoURL: string;
+  createdAt: number;
+  message: string;
+};
+
+type LikeDocument = {
+  id: string;
+  itemType: "photo" | "todo";
+  entryId: string;
+  todoId: string;
+  ownerUid: string;
+  fromUid: string;
+  fromName: string;
+  fromPhotoURL: string;
+  weekId: string;
+  dayIndex: number;
+  itemText: string;
+  createdAt: number;
+};
+
+type StoryGroup = {
+  member: Member;
+  entries: Entry[];
+};
+
+type StoryItem = {
+  key: string;
+  member: Member;
+  entry: Entry;
+  timestamp: number;
+};
 
 const makeMember = (user: User): Member => ({
   uid: user.uid,
@@ -95,9 +178,21 @@ const toDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+const toCompactDateKey = (date: Date) => {
+  const year = String(date.getFullYear()).slice(2);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+};
+
 const getWeekId = (date = new Date()) => {
   const weekStart = getWeekStart(date);
   return toDateKey(weekStart);
+};
+
+const getTodayIndex = () => {
+  const today = new Date().getDay();
+  return today === 0 ? 6 : today - 1;
 };
 
 const getWeekDays = (): Day[] => {
@@ -111,15 +206,11 @@ const getWeekDays = (): Day[] => {
     return {
       date,
       key: toDateKey(date),
-      label: date.toLocaleDateString("ko-KR", {
-        month: "long",
-        day: "numeric",
-        weekday: "long",
-      }),
-      shortLabel: date.toLocaleDateString("ko-KR", {
-        weekday: "short",
-        day: "numeric",
-      }),
+      label: WEEKDAY_LABELS[index],
+      shortLabel: WEEKDAY_LABELS[index],
+      title: `${toCompactDateKey(date)}${WEEKDAY_FULL_LABELS[index]}${
+        date.toDateString() === today.toDateString() ? " 오늘!" : ""
+      }`,
       isToday: date.toDateString() === today.toDateString(),
     };
   });
@@ -128,6 +219,29 @@ const getWeekDays = (): Day[] => {
 const getInviteCodeFromUrl = () =>
   new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase() ??
   "";
+
+const formatHour = (timestamp?: number | null) => {
+  if (!timestamp) return "";
+
+  return `${new Date(timestamp).getHours()}시`;
+};
+
+const formatMonthDay = (timestamp?: number | null) => {
+  if (!timestamp) return "";
+
+  const date = new Date(timestamp);
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+};
+
+const makeLike = (user: User, member?: Member | null): Like => ({
+  uid: user.uid,
+  name: member?.name ?? user.displayName ?? "이름 없는 친구",
+  photoURL: member?.photoURL ?? user.photoURL ?? "",
+  createdAt: getTimestamp(),
+});
+
+const getLikeId = (itemType: "photo" | "todo", entryId: string, itemId: string, uid: string) =>
+  `${itemType}_${entryId}_${itemId}_${uid}`;
 
 const enterOrCreateRoom = async (user: User, code: string, weekId: string) => {
   await runTransaction(db, async (transaction) => {
@@ -179,11 +293,11 @@ const resizeImage = (file: File): Promise<string> =>
     image.onerror = reject;
 
     image.onload = async () => {
-      let maxSide = 720;
-      let quality = 0.72;
+      let maxSide = 640;
+      let quality = 0.68;
       let bestDataUrl = "";
 
-      for (let attempt = 0; attempt < 8; attempt += 1) {
+      for (let attempt = 0; attempt < 12; attempt += 1) {
         const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
         const canvas = document.createElement("canvas");
         canvas.width = Math.round(image.width * scale);
@@ -196,19 +310,64 @@ const resizeImage = (file: File): Promise<string> =>
         }
 
         context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL("image/webp", quality);
+        const webpDataUrl = canvas.toDataURL("image/webp", quality);
+        const dataUrl = webpDataUrl.startsWith("data:image/webp")
+          ? webpDataUrl
+          : canvas.toDataURL("image/jpeg", quality);
         bestDataUrl = dataUrl;
 
-        if (dataUrl.length * 0.75 < PHOTO_SIZE_LIMIT) {
+        if (dataUrl.length < PHOTO_SIZE_LIMIT) {
           resolve(dataUrl);
           return;
         }
 
-        maxSide = Math.round(maxSide * 0.82);
-        quality = Math.max(0.44, quality - 0.07);
+        maxSide = Math.round(maxSide * 0.78);
+        quality = Math.max(0.34, quality - 0.06);
       }
 
-      resolve(bestDataUrl);
+      if (bestDataUrl.length < PHOTO_SIZE_LIMIT) {
+        resolve(bestDataUrl);
+        return;
+      }
+
+      reject(new Error("사진 용량을 충분히 줄이지 못했어요."));
+    };
+
+    reader.readAsDataURL(file);
+  });
+
+const resizeProfileImage = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      image.src = String(reader.result);
+    };
+
+    reader.onerror = reject;
+    image.onerror = reject;
+
+    image.onload = () => {
+      const maxSide = 180;
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.width * scale);
+      canvas.height = Math.round(image.height * scale);
+
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("프로필 사진을 줄일 수 없어요."));
+        return;
+      }
+
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const webpDataUrl = canvas.toDataURL("image/webp", 0.72);
+      resolve(
+        webpDataUrl.startsWith("data:image/webp")
+          ? webpDataUrl
+          : canvas.toDataURL("image/jpeg", 0.72)
+      );
     };
 
     reader.readAsDataURL(file);
@@ -218,24 +377,27 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [likes, setLikes] = useState<LikeDocument[]>([]);
   const [inviteCode] = useState(() => getInviteCodeFromUrl());
   const targetRoomCode = inviteCode || MAIN_ROOM_CODE;
   const [roomCode, setRoomCode] = useState(
     () => targetRoomCode || localStorage.getItem(STORAGE_KEY) || MAIN_ROOM_CODE
   );
   const [todoText, setTodoText] = useState("");
-  const [activeDay, setActiveDay] = useState(() => {
-    const today = new Date().getDay();
-    return today === 0 ? 6 : today - 1;
-  });
-  const [activeFeedView, setActiveFeedView] = useState<FeedView>("photo");
+  const [nicknameText, setNicknameText] = useState("");
+  const [activeDay, setActiveDay] = useState(() => getTodayIndex());
+  const [activeFeedView, setActiveFeedView] = useState<FeedView>("all");
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [activeStoryUid, setActiveStoryUid] = useState<string | null>(null);
+  const [activeStoryIndex, setActiveStoryIndex] = useState(0);
+  const [isSavingProfilePhoto, setIsSavingProfilePhoto] = useState(false);
   const [isSavingPhoto, setIsSavingPhoto] = useState(false);
-  const [message, setMessage] = useState(() =>
-    getInviteCodeFromUrl()
-      ? "초대 링크의 방으로 들어가는 중이에요."
-      : "메인 방으로 들어가는 중이에요."
-  );
+  const [message, setMessage] = useState("");
   const dayStripRef = useRef<HTMLDivElement | null>(null);
+  const activeDayRef = useRef(activeDay);
+  const isProgrammaticDayScrollRef = useRef(false);
 
   const weekId = useMemo(() => getWeekId(), []);
   const weekDays = useMemo(() => getWeekDays(), []);
@@ -250,9 +412,6 @@ function App() {
         .then(() => {
           localStorage.setItem(STORAGE_KEY, targetRoomCode);
           setRoomCode(targetRoomCode);
-          setMessage(
-            inviteCode ? "초대 링크의 방에 들어왔어요." : "메인 방에 들어왔어요."
-          );
         })
         .catch((error) => {
           setRoom(null);
@@ -313,6 +472,45 @@ function App() {
     return () => unsubscribe();
   }, [room, weekId]);
 
+  useEffect(() => {
+    if (!room) {
+      return;
+    }
+
+    const likesQuery = query(
+      collection(db, "rooms", room.id, "likes"),
+      where("weekId", "==", weekId)
+    );
+
+    const unsubscribe = onSnapshot(likesQuery, (snapshot) => {
+      const nextLikes = snapshot.docs.map((likeDoc) => ({
+        id: likeDoc.id,
+        ...likeDoc.data(),
+      })) as LikeDocument[];
+
+      setLikes(nextLikes);
+    });
+
+    return () => unsubscribe();
+  }, [room, weekId]);
+
+  useEffect(() => {
+    activeDayRef.current = activeDay;
+  }, [activeDay]);
+
+  useEffect(() => {
+    if (!room || isProfileOpen || isNotificationsOpen) return;
+
+    const dayStrip = dayStripRef.current;
+    if (!dayStrip) return;
+
+    isProgrammaticDayScrollRef.current = true;
+    dayStrip.scrollLeft = activeDayRef.current * dayStrip.clientWidth;
+    window.setTimeout(() => {
+      isProgrammaticDayScrollRef.current = false;
+    }, 120);
+  }, [isNotificationsOpen, isProfileOpen, room]);
+
   const login = async () => {
     const provider = new GoogleAuthProvider();
     try {
@@ -327,30 +525,145 @@ function App() {
     }
   };
 
+  const updateNickname = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user || !room) return;
+
+    const nextName = nicknameText.trim();
+    if (!nextName) return;
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const roomRef = doc(db, "rooms", room.id);
+        const roomSnapshot = await transaction.get(roomRef);
+
+        if (!roomSnapshot.exists()) {
+          throw new Error("방을 찾을 수 없어요.");
+        }
+
+        const data = roomSnapshot.data() as Omit<Room, "id">;
+        const currentMember = data.members?.[user.uid];
+
+        if (!currentMember) {
+          throw new Error("방 멤버 정보를 찾을 수 없어요.");
+        }
+
+        if (currentMember.nameChangedAt) {
+          throw new Error("닉네임은 한 번만 바꿀 수 있어요.");
+        }
+
+        transaction.update(roomRef, {
+          [`members.${user.uid}.name`]: nextName,
+          [`members.${user.uid}.nameChangedAt`]: getTimestamp(),
+        });
+      });
+
+      setNicknameText("");
+      setMessage("닉네임을 바꿨어요.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "닉네임 변경에 실패했어요."
+      );
+    }
+  };
+
+  const updateProfilePhoto = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user || !room) return;
+
+    setIsSavingProfilePhoto(true);
+
+    try {
+      const photoDataUrl = await resizeProfileImage(file);
+      await runTransaction(db, async (transaction) => {
+        const roomRef = doc(db, "rooms", room.id);
+        const roomSnapshot = await transaction.get(roomRef);
+
+        if (!roomSnapshot.exists()) {
+          throw new Error("방을 찾을 수 없어요.");
+        }
+
+        transaction.update(roomRef, {
+          [`members.${user.uid}.photoURL`]: photoDataUrl,
+        });
+      });
+
+      setMessage("프로필 사진을 바꿨어요.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "프로필 사진 변경에 실패했어요."
+      );
+    } finally {
+      setIsSavingProfilePhoto(false);
+      event.target.value = "";
+    }
+  };
+
   const scrollToDay = (dayIndex: number) => {
+    activeDayRef.current = dayIndex;
+    isProgrammaticDayScrollRef.current = true;
     setActiveDay(dayIndex);
+
     const target = dayStripRef.current?.querySelector<HTMLElement>(
       `[data-day-index="${dayIndex}"]`
     );
     target?.scrollIntoView({ behavior: "smooth", inline: "start" });
+    window.setTimeout(() => {
+      isProgrammaticDayScrollRef.current = false;
+    }, 420);
   };
 
-  const upsertMyEntry = async (nextEntry: Partial<Entry>) => {
+  const openStory = (uid: string) => {
+    const firstStoryIndex = storyItems.findIndex(
+      (storyItem) => storyItem.member.uid === uid
+    );
+
+    if (firstStoryIndex < 0) return;
+
+    setActiveStoryUid(uid);
+    setActiveStoryIndex(firstStoryIndex);
+  };
+
+  const closeStory = () => {
+    setActiveStoryUid(null);
+    setActiveStoryIndex(0);
+  };
+
+  const showPreviousStory = () => {
+    setActiveStoryIndex((currentIndex) => Math.max(0, currentIndex - 1));
+  };
+
+  const showNextStory = () => {
+    setActiveStoryIndex((currentIndex) => {
+      if (currentIndex >= storyItems.length - 1) {
+        return currentIndex;
+      }
+
+      return currentIndex + 1;
+    });
+  };
+
+  const upsertMyEntry = async (
+    nextEntry: Partial<Entry>,
+    dayIndex = activeDay
+  ) => {
     if (!user || !room) return;
 
-    const entryId = `${user.uid}_${weekId}_${activeDay}`;
+    const entryId = `${user.uid}_${weekId}_${dayIndex}`;
     const currentEntry = entries.find(
-      (entry) => entry.uid === user.uid && entry.dayIndex === activeDay
+      (entry) => entry.uid === user.uid && entry.dayIndex === dayIndex
     );
 
     await setDoc(
       doc(db, "rooms", room.id, "entries", entryId),
       {
         uid: user.uid,
-        userName: user.displayName ?? "이름 없는 친구",
-        userPhotoURL: user.photoURL ?? "",
+        userName: room.members[user.uid]?.name ?? user.displayName ?? "이름 없는 친구",
+        userPhotoURL: room.members[user.uid]?.photoURL ?? user.photoURL ?? "",
         weekId,
-        dayIndex: activeDay,
+        dayIndex,
         todos: currentEntry?.todos ?? [],
         photoDataUrl: currentEntry?.photoDataUrl ?? "",
         photoUpdatedAt: currentEntry?.photoUpdatedAt ?? null,
@@ -364,9 +677,10 @@ function App() {
   const addTodo = async () => {
     const text = todoText.trim();
     if (!text) return;
+    const todayIndex = getTodayIndex();
 
     const currentEntry = entries.find(
-      (entry) => entry.uid === user?.uid && entry.dayIndex === activeDay
+      (entry) => entry.uid === user?.uid && entry.dayIndex === todayIndex
     );
     const nextTodos = [
       ...(currentEntry?.todos ?? []),
@@ -375,23 +689,98 @@ function App() {
         text,
         isDone: false,
         createdAt: getTimestamp(),
+        completedAt: null,
       },
     ];
 
-    await upsertMyEntry({ todos: nextTodos });
+    await upsertMyEntry({ todos: nextTodos }, todayIndex);
     setTodoText("");
   };
 
-  const updateTodo = async (todoId: string, nextIsDone: boolean) => {
+  const updateTodo = async (
+    todoId: string,
+    nextIsDone: boolean,
+    dayIndex = activeDay
+  ) => {
+    if (!room) return;
+
     const currentEntry = entries.find(
-      (entry) => entry.uid === user?.uid && entry.dayIndex === activeDay
+      (entry) => entry.uid === user?.uid && entry.dayIndex === dayIndex
     );
     if (!currentEntry) return;
 
-    await upsertMyEntry({
-      todos: currentEntry.todos.map((todo) =>
-        todo.id === todoId ? { ...todo, isDone: nextIsDone } : todo
-      ),
+    const completionTime = nextIsDone ? getTimestamp() : null;
+
+    await setDoc(
+      doc(db, "rooms", room.id, "entries", currentEntry.id),
+      {
+        todos: currentEntry.todos.map((todo) =>
+          todo.id === todoId
+            ? { ...todo, isDone: nextIsDone, completedAt: completionTime }
+            : todo
+        ),
+        updatedAt: getTimestamp(),
+      },
+      { merge: true }
+    );
+  };
+
+  const togglePhotoLike = async (entry: Entry) => {
+    if (!user || !room) return;
+
+    const likeId = getLikeId("photo", entry.id, "photo", user.uid);
+    const likeRef = doc(db, "rooms", room.id, "likes", likeId);
+    const existingLike = likes.find((like) => like.id === likeId);
+
+    if (existingLike) {
+      await deleteDoc(likeRef);
+      return;
+    }
+
+    const like = makeLike(user, myMember);
+    await setDoc(likeRef, {
+      itemType: "photo",
+      entryId: entry.id,
+      todoId: "",
+      ownerUid: entry.uid,
+      fromUid: like.uid,
+      fromName: like.name,
+      fromPhotoURL: like.photoURL,
+      weekId: entry.weekId,
+      dayIndex: entry.dayIndex,
+      itemText: "사진",
+      createdAt: like.createdAt,
+    });
+  };
+
+  const toggleTodoLike = async (entry: Entry, todoId: string) => {
+    if (!user || !room) return;
+
+    const todo = entry.todos.find((candidate) => candidate.id === todoId);
+    if (!todo) return;
+
+    const likeId = getLikeId("todo", entry.id, todoId, user.uid);
+    const likeRef = doc(db, "rooms", room.id, "likes", likeId);
+    const existingLike = likes.find((like) => like.id === likeId);
+
+    if (existingLike) {
+      await deleteDoc(likeRef);
+      return;
+    }
+
+    const like = makeLike(user, myMember);
+    await setDoc(likeRef, {
+      itemType: "todo",
+      entryId: entry.id,
+      todoId,
+      ownerUid: entry.uid,
+      fromUid: like.uid,
+      fromName: like.name,
+      fromPhotoURL: like.photoURL,
+      weekId: entry.weekId,
+      dayIndex: entry.dayIndex,
+      itemText: todo.text,
+      createdAt: like.createdAt,
     });
   };
 
@@ -409,19 +798,28 @@ function App() {
   const uploadPhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    const todayIndex = getTodayIndex();
 
     setIsSavingPhoto(true);
     setMessage("사진을 작게 줄이는 중이에요.");
 
     try {
       const photoDataUrl = await resizeImage(file);
-      await upsertMyEntry({
-        photoDataUrl,
-        photoUpdatedAt: getTimestamp(),
-      });
+      await upsertMyEntry(
+        {
+          photoDataUrl,
+          photoUpdatedAt: getTimestamp(),
+        },
+        todayIndex
+      );
       setMessage("사진이 압축되어 저장됐어요.");
-    } catch {
-      setMessage("사진 저장에 실패했어요. 다른 이미지를 골라주세요.");
+      setIsAddOpen(false);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "사진 저장에 실패했어요. 다른 이미지를 골라주세요."
+      );
     } finally {
       setIsSavingPhoto(false);
       event.target.value = "";
@@ -432,19 +830,141 @@ function App() {
     if (!room) return [];
     return Object.values(room.members ?? {}).sort((a, b) => a.joinedAt - b.joinedAt);
   }, [room]);
-
-  const myActiveEntry = entries.find(
-    (entry) => entry.uid === user?.uid && entry.dayIndex === activeDay
+  const storyGroups = useMemo<StoryGroup[]>(
+    () =>
+      members
+        .map((member) => ({
+          member,
+          entries: entries
+            .filter((entry) => entry.uid === member.uid && entry.photoDataUrl)
+            .sort(
+              (firstEntry, secondEntry) =>
+                (firstEntry.photoUpdatedAt ?? firstEntry.updatedAt) -
+                (secondEntry.photoUpdatedAt ?? secondEntry.updatedAt)
+            ),
+        }))
+        .filter((group) => group.entries.length),
+    [entries, members]
   );
+  const storyItems: StoryItem[] = members
+    .flatMap((member) =>
+      entries
+        .filter((entry) => entry.uid === member.uid && entry.photoDataUrl)
+        .map((entry) => ({
+          key: `${member.uid}_${entry.id}`,
+          member,
+          entry,
+          timestamp: entry.photoUpdatedAt ?? entry.updatedAt,
+        }))
+    )
+    .sort(
+      (firstStoryItem, secondStoryItem) =>
+        firstStoryItem.timestamp - secondStoryItem.timestamp
+    );
+  const activeStoryItem = activeStoryUid ? storyItems[activeStoryIndex] : null;
+  const activeStoryCount = storyItems.length;
+  const hasActiveStoryItem = Boolean(activeStoryItem);
+
+  useEffect(() => {
+    if (!activeStoryUid || !hasActiveStoryItem) return;
+
+    const timer = window.setTimeout(() => {
+      if (activeStoryIndex >= activeStoryCount - 1) {
+        setActiveStoryUid(null);
+        setActiveStoryIndex(0);
+        return;
+      }
+
+      setActiveStoryIndex(activeStoryIndex + 1);
+    }, 3500);
+
+    return () => window.clearTimeout(timer);
+  }, [activeStoryCount, activeStoryIndex, activeStoryUid, hasActiveStoryItem]);
+
+  const myMember = user && room ? room.members[user.uid] : null;
+  const canChangeNickname = Boolean(myMember && !myMember.nameChangedAt);
+  const myTodoGroups = Object.values(
+    entries
+      .filter((entry) => entry.uid === user?.uid && entry.todos.length)
+      .flatMap((entry) =>
+        entry.todos.map((todo) => ({
+          dayIndex: entry.dayIndex,
+          sortTime: todo.completedAt ?? todo.createdAt,
+          todo,
+        }))
+      )
+      .reduce<
+        Record<
+          string,
+          {
+            key: string;
+            title: string;
+            sortTime: number;
+            todos: Array<{ dayIndex: number; todo: Todo }>;
+          }
+        >
+      >((groups, item) => {
+        const dateKey = toDateKey(new Date(item.sortTime));
+
+        groups[dateKey] ??= {
+          key: dateKey,
+          title: formatMonthDay(item.sortTime),
+          sortTime: item.sortTime,
+          todos: [],
+        };
+
+        groups[dateKey].sortTime = Math.max(groups[dateKey].sortTime, item.sortTime);
+        groups[dateKey].todos.push({
+          dayIndex: item.dayIndex,
+          todo: item.todo,
+        });
+
+        return groups;
+      }, {})
+  )
+    .map((group) => ({
+      ...group,
+      todos: group.todos.sort(
+        (firstItem, secondItem) =>
+          (secondItem.todo.completedAt ?? secondItem.todo.createdAt) -
+          (firstItem.todo.completedAt ?? firstItem.todo.createdAt)
+      ),
+    }))
+    .sort((firstGroup, secondGroup) => secondGroup.sortTime - firstGroup.sortTime);
+  const likeNotifications = useMemo<LikeNotification[]>(() => {
+    if (!user) return [];
+
+    return likes
+      .filter((like) => like.ownerUid === user.uid)
+      .map((like) => {
+        const dayTitle = weekDays[like.dayIndex]?.title ?? "기록";
+        const targetText =
+          like.itemType === "photo"
+            ? `${dayTitle} 사진`
+            : `"${like.itemText}" 투두`;
+
+        return {
+          id: like.id,
+          fromName: like.fromName,
+          fromPhotoURL: like.fromPhotoURL,
+          createdAt: like.createdAt,
+          message: `${like.fromName}님이 ${targetText}를 좋아해요.`,
+        };
+      })
+      .sort(
+        (firstNotification, secondNotification) =>
+          secondNotification.createdAt - firstNotification.createdAt
+      );
+  }, [likes, user, weekDays]);
 
   if (!user) {
     return (
       <main className="bg-[#f5f7f8] text-center w-[100vw] h-[100vh] flex justify-center items-center">
         <div className="flex flex-col justify-between items-center">
-          <p className={'text-[45px] text-center text-black font-bold leading-[1.1]'}>일시니들<br/>생존신고방️</p>
+          <p className={'text-[45px] text-center text-black font-bold leading-[1.1]'}>미리친구들<br/>생존신고방️</p>
           <section className="mt-[6px] w-full">
             <p className={' text-[12px]'}>
-              일상자랑 갓생자랑 뭐먹었는지 자랑하는 그런 방
+              뭐먹었는지 자랑하고 갓생 응원하는 방
             </p>
             <button className="rounded-[14px] w-full mt-[30px] px-[25px] py-[15px] bg-[#3f79eb] text-white font-regural"
                     onClick={login}>
@@ -484,15 +1004,177 @@ function App() {
     );
   }
 
+  if (isProfileOpen) {
+    return (
+      <main className="profile-screen">
+        <header className="profile-header">
+          <button
+            className="ghost-button"
+            onClick={() => setIsProfileOpen(false)}
+            type="button"
+          >
+            뒤로
+          </button>
+          <h1>마이</h1>
+        </header>
+
+        <section className="profile-panel">
+          <div className="profile-photo-preview">
+            {myMember?.photoURL ? (
+              <img src={myMember.photoURL} alt="" />
+            ) : (
+              <span>{myMember?.name.slice(0, 1) ?? "나"}</span>
+            )}
+          </div>
+
+          <label className="profile-photo-button">
+            <input
+              accept="image/*"
+              disabled={isSavingProfilePhoto}
+              onChange={updateProfilePhoto}
+              type="file"
+            />
+            {isSavingProfilePhoto ? "저장 중" : "프로필 사진 바꾸기"}
+          </label>
+
+          <form className="profile-nickname-form" onSubmit={updateNickname}>
+            <label>
+              닉네임
+              <input
+                disabled={!canChangeNickname}
+                maxLength={12}
+                onChange={(event) => setNicknameText(event.target.value)}
+                placeholder={
+                  canChangeNickname
+                    ? `${myMember?.name ?? "내"} 닉네임 바꾸기`
+                    : myMember?.name ?? ""
+                }
+                value={nicknameText}
+              />
+            </label>
+            <button
+              disabled={!canChangeNickname || !nicknameText.trim()}
+              type="submit"
+            >
+              저장
+            </button>
+            {!canChangeNickname && (
+              <p className="profile-note">닉네임은 이미 한 번 바꿨어요.</p>
+            )}
+          </form>
+
+          <section className="profile-todo-panel">
+            <div>
+              <strong>내 할 일</strong>
+              <span>여기서 확인하면 피드에 완료 기록이 올라가요.</span>
+            </div>
+
+            {myTodoGroups.length ? (
+              <div className="profile-todo-groups">
+                {myTodoGroups.map((group) => (
+                  <section className="profile-todo-group" key={group.key}>
+                    <h2>{group.title}</h2>
+                    <ul>
+                      {group.todos.map(({ dayIndex, todo }) => (
+                        <li className={todo.isDone ? "done" : ""} key={todo.id}>
+                          <input
+                            checked={todo.isDone}
+                            onChange={(event) =>
+                              updateTodo(todo.id, event.target.checked, dayIndex)
+                            }
+                            type="checkbox"
+                          />
+                          <div>
+                            <span>{todo.text}</span>
+                            <time>
+                              시작 {formatMonthDay(todo.createdAt)}
+                              {todo.completedAt
+                                ? ` · 완료 ${formatMonthDay(todo.completedAt)}`
+                                : ""}
+                            </time>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-note">아직 등록한 할 일이 없어요.</p>
+            )}
+          </section>
+        </section>
+
+        {message && <p className="toast">{message}</p>}
+      </main>
+    );
+  }
+
+  if (isNotificationsOpen) {
+    return (
+      <main className="profile-screen">
+        <header className="profile-header">
+          <button
+            className="ghost-button"
+            onClick={() => setIsNotificationsOpen(false)}
+            type="button"
+          >
+            뒤로
+          </button>
+          <h1>알림</h1>
+        </header>
+
+        <section className="notification-list">
+          {likeNotifications.length ? (
+            likeNotifications.map((notification) => (
+              <article className="notification-item" key={notification.id}>
+                {notification.fromPhotoURL ? (
+                  <img src={notification.fromPhotoURL} alt="" />
+                ) : (
+                  <span>{notification.fromName.slice(0, 1)}</span>
+                )}
+                <div>
+                  <strong>{notification.message}</strong>
+                  <time>{formatHour(notification.createdAt)}</time>
+                </div>
+              </article>
+            ))
+          ) : (
+            <p className="empty-note">아직 받은 좋아요가 없어요.</p>
+          )}
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <header className="room-header">
-        <div>
-          <h1>{room.name}</h1>
-          <p>
-            {members.length}/{MAX_MEMBERS}명 참여 중 · 매주 월요일 새 기록으로
-            시작
-          </p>
+        <div className="w-full flex items-center justify-between header-icon-actions">
+          <button
+            className="profile-icon-button"
+            onClick={() => setIsProfileOpen(true)}
+            type="button"
+            title="프로필 수정"
+          >
+            {myMember?.photoURL ? (
+              <img src={myMember.photoURL} alt=""/>
+            ) : (
+              <span>{myMember?.name.slice(0, 1) ?? "나"}</span>
+            )}
+          </button>
+          <button
+            className="notification-button"
+            onClick={() => setIsNotificationsOpen(true)}
+            type="button"
+            title="좋아요 알림"
+          >
+            좋아요
+            {likeNotifications.length > 0 && (
+              <span>{likeNotifications.length}</span>
+            )}
+          </button>
+
         </div>
       </header>
 
@@ -509,13 +1191,39 @@ function App() {
         ))}
       </nav>
 
+      {storyGroups.length > 0 && (
+        <section className="story-rail" aria-label="스토리">
+          {storyGroups.map((group) => (
+            <button
+              className="story-bubble"
+              key={group.member.uid}
+              onClick={() => openStory(group.member.uid)}
+              type="button"
+            >
+              <span>
+                {group.member.photoURL ? (
+                  <img src={group.member.photoURL} alt="" />
+                ) : (
+                  group.member.name.slice(0, 1)
+                )}
+              </span>
+              <strong>{group.member.name}</strong>
+            </button>
+          ))}
+        </section>
+      )}
+
       <section
         className="day-strip"
         ref={dayStripRef}
         onScroll={(event) => {
+          if (isProgrammaticDayScrollRef.current) return;
+
           const width = event.currentTarget.clientWidth;
           const nextIndex = Math.round(event.currentTarget.scrollLeft / width);
-          setActiveDay(Math.min(6, Math.max(0, nextIndex)));
+          const clampedIndex = Math.min(6, Math.max(0, nextIndex));
+          activeDayRef.current = clampedIndex;
+          setActiveDay(clampedIndex);
         }}
       >
         {weekDays.map((day, dayIndex) => {
@@ -526,6 +1234,54 @@ function App() {
             );
             return { member, entry };
           });
+          const feedItems = dayEntries
+            .flatMap<FeedItem>(({ member, entry }) => {
+              if (!entry) return [];
+
+              const items: FeedItem[] = [];
+
+              if (
+                (activeFeedView === "all" || activeFeedView === "photo") &&
+                entry.photoDataUrl
+              ) {
+                items.push({
+                  type: "photo",
+                  key: `photo-${member.uid}-${entry.photoUpdatedAt ?? entry.updatedAt}`,
+                  member,
+                  entry,
+                  timestamp: entry.photoUpdatedAt ?? entry.updatedAt,
+                });
+              }
+
+              if (activeFeedView === "all" || activeFeedView === "todo") {
+                entry.todos.forEach((todo) => {
+                  if (todo.isDone && todo.completedAt) {
+                    items.push({
+                      type: "todoDone",
+                      key: `todo-done-${member.uid}-${todo.id}-${todo.completedAt}`,
+                      member,
+                      entry,
+                      todo,
+                      timestamp: todo.completedAt,
+                    });
+                  }
+
+                  items.push({
+                    type: "todo",
+                    key: `todo-${member.uid}-${todo.id}`,
+                    member,
+                    entry,
+                    todo,
+                    timestamp: todo.createdAt,
+                  });
+                });
+              }
+
+              return items;
+            })
+            .sort(
+              (firstItem, secondItem) => secondItem.timestamp - firstItem.timestamp
+            );
 
           return (
             <article
@@ -535,134 +1291,295 @@ function App() {
             >
               <div className="day-title">
                 <div>
-                  <h2>{day.label}</h2>
-                  {day.isToday && <span>오늘</span>}
+                  <h2>{day.title}</h2>
                 </div>
-                <p>{dayEntries.filter(({ entry }) => entry).length}명 기록</p>
+                <p>{feedItems.length}개 기록</p>
               </div>
 
-              <section className="composer">
-                <div>
-                  <strong>내 기록</strong>
-                  <span>할 일과 사진은 이 날짜에 저장됩니다.</span>
-                </div>
-                <div className="todo-input">
-                  <input
-                    value={dayIndex === activeDay ? todoText : ""}
-                    onChange={(event) => setTodoText(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") addTodo();
-                    }}
-                    placeholder="오늘 할 일"
-                    disabled={dayIndex !== activeDay}
-                  />
-                  <button
-                    className="icon-button"
-                    onClick={addTodo}
-                    disabled={dayIndex !== activeDay}
-                    type="button"
-                    title="할 일 추가"
-                  >
-                    +
-                  </button>
-                </div>
-                <label className="photo-button">
-                  <input
-                    accept="image/*"
-                    disabled={dayIndex !== activeDay || isSavingPhoto}
-                    onChange={uploadPhoto}
-                    type="file"
-                  />
-                  {isSavingPhoto && dayIndex === activeDay ? "압축 중" : "사진 올리기"}
-                </label>
-              </section>
-
               <div className="friend-feed">
-                {dayEntries.map(({ member, entry }) => {
-                  const todos = entry?.todos ?? [];
-                  const doneCount = todos.filter((todo) => todo.isDone).length;
-                  const isMine = member.uid === user.uid;
+                {feedItems.length ? (
+                  feedItems.map((item) => {
+                    const isMine = item.member.uid === user.uid;
 
-                  return (
-                    <section className="friend-card" key={member.uid}>
+                    if (item.type === "photo") {
+                      const photoLikes = likes.filter(
+                        (like) =>
+                          like.itemType === "photo" &&
+                          like.entryId === item.entry.id
+                      );
+                      const hasLikedPhoto = photoLikes.some(
+                        (like) => like.fromUid === user.uid
+                      );
+
+                      return (
+                        <section className="friend-card" key={item.key}>
+                          <div className="friend-top">
+                            {item.member.photoURL ? (
+                              <img src={item.member.photoURL} alt="" />
+                            ) : (
+                              <div className="avatar-fallback">
+                                {item.member.name.slice(0, 1)}
+                              </div>
+                            )}
+                            <div>
+                              <strong>{item.member.name}</strong>
+                            </div>
+                          </div>
+
+                          <div className="photo-frame">
+                            <img
+                              className="daily-photo"
+                              src={item.entry.photoDataUrl}
+                              alt={`${item.member.name}의 하루 사진`}
+                            />
+                            <span className="photo-time">
+                              {formatHour(item.entry.photoUpdatedAt)}
+                            </span>
+                          </div>
+                          <button
+                            className={`like-button ${
+                              hasLikedPhoto ? "active" : ""
+                            }`}
+                            onClick={() => togglePhotoLike(item.entry)}
+                            type="button"
+                          >
+                            좋아요 {photoLikes.length}
+                          </button>
+                        </section>
+                      );
+                    }
+
+                    const todoLikes = likes.filter(
+                      (like) =>
+                        like.itemType === "todo" &&
+                        like.entryId === item.entry.id &&
+                        like.todoId === item.todo.id
+                    );
+                    const hasLikedTodo = todoLikes.some(
+                      (like) => like.fromUid === user.uid
+                    );
+
+                    if (item.type === "todoDone") {
+                      return (
+                        <section
+                          className="friend-card todo-complete-card"
+                          key={item.key}
+                        >
+                          <div className="friend-top">
+                            {item.member.photoURL ? (
+                              <img src={item.member.photoURL} alt="" />
+                            ) : (
+                              <div className="avatar-fallback">
+                                {item.member.name.slice(0, 1)}
+                              </div>
+                            )}
+                            <div>
+                              <strong>{item.member.name}</strong>
+                              <span>{formatHour(item.todo.completedAt)}</span>
+                            </div>
+                          </div>
+
+                          <p>
+                            <strong>{item.todo.text}</strong> 완료!
+                          </p>
+
+                          <button
+                            className={`like-button ${
+                              hasLikedTodo ? "active" : ""
+                            }`}
+                            onClick={() => toggleTodoLike(item.entry, item.todo.id)}
+                            type="button"
+                          >
+                            좋아요 {todoLikes.length}
+                          </button>
+                        </section>
+                      );
+                    }
+
+                    return (
+                      <section
+                        className={`friend-card todo-feed-card ${
+                          item.todo.isDone ? "done" : ""
+                        }`}
+                        key={item.key}
+                      >
                       <div className="friend-top">
-                        {member.photoURL ? (
-                          <img src={member.photoURL} alt="" />
+                        {item.member.photoURL ? (
+                          <img src={item.member.photoURL} alt="" />
                         ) : (
                           <div className="avatar-fallback">
-                            {member.name.slice(0, 1)}
+                            {item.member.name.slice(0, 1)}
                           </div>
                         )}
                         <div>
-                          <strong>{member.name}</strong>
-                          <span>
-                            {todos.length
-                              ? `${doneCount}/${todos.length} 완료`
-                              : "아직 할 일이 없어요"}
-                          </span>
+                          <strong>{item.member.name}</strong>
+                          <span>{formatHour(item.todo.createdAt)}</span>
                         </div>
                       </div>
 
-                      {activeFeedView === "photo" &&
-                        (entry?.photoDataUrl ? (
-                          <img
-                            className="daily-photo"
-                            src={entry.photoDataUrl}
-                            alt={`${member.name}의 하루 사진`}
+                      <div className="single-todo-row">
+                        {isMine && day.isToday ? (
+                          <input
+                            checked={item.todo.isDone}
+                            onChange={(event) =>
+                              updateTodo(item.todo.id, event.target.checked)
+                            }
+                            type="checkbox"
                           />
                         ) : (
-                          <div className="photo-placeholder">사진 대기 중</div>
-                        ))}
-
-                      {activeFeedView === "todo" &&
-                        (todos.length ? (
-                          <ul className="todo-list">
-                            {todos.map((todo) => (
-                              <li
-                                className={todo.isDone ? "done" : ""}
-                                key={todo.id}
-                              >
-                                {isMine && dayIndex === activeDay ? (
-                                  <input
-                                    checked={todo.isDone}
-                                    onChange={(event) =>
-                                      updateTodo(todo.id, event.target.checked)
-                                    }
-                                    type="checkbox"
-                                  />
-                                ) : (
-                                  <span className="status-dot" />
-                                )}
-                                <span>{todo.text}</span>
-                                {isMine && dayIndex === activeDay && (
-                                  <button
-                                    onClick={() => deleteTodo(todo.id)}
-                                    title="삭제"
-                                    type="button"
-                                  >
-                                    ×
-                                  </button>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="empty-note">아직 할 일이 없어요.</p>
-                        ))}
-
-                      {!todos.length && !entry?.photoDataUrl && activeFeedView === "photo" && (
-                        <p className="empty-note">오늘은 조용한 날이에요.</p>
-                      )}
+                          <span className="status-dot" />
+                        )}
+                        <span>{item.todo.text}</span>
+                        {isMine && day.isToday && (
+                          <button
+                            onClick={() => deleteTodo(item.todo.id)}
+                            title="삭제"
+                            type="button"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        className={`like-button ${hasLikedTodo ? "active" : ""}`}
+                        onClick={() => toggleTodoLike(item.entry, item.todo.id)}
+                        type="button"
+                      >
+                        좋아요 {todoLikes.length}
+                      </button>
                     </section>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <p className="empty-note">아직 올라온 기록이 없어요.</p>
+                )}
               </div>
             </article>
           );
         })}
       </section>
 
-      <div className="slide-indicators" aria-label="피드 보기 선택">
+      {activeStoryItem && (
+        <div className="story-viewer" role="dialog" aria-label="스토리 보기">
+          <div className="story-progress">
+            {storyItems.map((storyItem, index) => (
+              <span
+                className={
+                  index < activeStoryIndex
+                    ? "active"
+                    : index === activeStoryIndex
+                      ? "current"
+                      : ""
+                }
+                key={storyItem.key}
+              />
+            ))}
+          </div>
+
+          <header className="story-viewer-header">
+            <div>
+              {activeStoryItem.member.photoURL ? (
+                <img src={activeStoryItem.member.photoURL} alt="" />
+              ) : (
+                <span>{activeStoryItem.member.name.slice(0, 1)}</span>
+              )}
+              <strong>{activeStoryItem.member.name}</strong>
+              <time>{formatHour(activeStoryItem.entry.photoUpdatedAt)}</time>
+            </div>
+            <button onClick={closeStory} type="button">
+              닫기
+            </button>
+          </header>
+
+          <div className="story-image-wrap">
+            <img
+              src={activeStoryItem.entry.photoDataUrl}
+              alt={`${activeStoryItem.member.name}의 스토리`}
+            />
+          </div>
+
+          <div className="story-controls">
+            <button
+              disabled={activeStoryIndex === 0}
+              onClick={showPreviousStory}
+              type="button"
+            >
+              이전
+            </button>
+            <button
+              disabled={activeStoryIndex >= storyItems.length - 1}
+              onClick={showNextStory}
+              type="button"
+            >
+              다음
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isAddOpen && (
+        <div className="add-modal-backdrop" role="presentation">
+          <section
+            aria-label="오늘 기록 추가"
+            className="add-modal"
+            role="dialog"
+          >
+            <div className="add-modal-header">
+              <div>
+                <strong>오늘 기록 추가</strong>
+                <span>할 일과 사진은 오늘 날짜에 저장됩니다.</span>
+              </div>
+              <button
+                className="ghost-button"
+                onClick={() => setIsAddOpen(false)}
+                type="button"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="todo-input">
+              <input
+                autoFocus
+                value={todoText}
+                onChange={(event) => setTodoText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") addTodo();
+                }}
+                placeholder="오늘 할 일"
+              />
+              <button
+                className="icon-button"
+                onClick={addTodo}
+                disabled={!todoText.trim()}
+                type="button"
+                title="할 일 추가"
+              >
+                +
+              </button>
+            </div>
+
+            <label className="photo-button">
+              <input
+                accept="image/*"
+                disabled={isSavingPhoto}
+                onChange={uploadPhoto}
+                type="file"
+              />
+              {isSavingPhoto ? "압축 중" : "사진 올리기"}
+            </label>
+          </section>
+        </div>
+      )}
+
+      <div className="slide-indicators" aria-label="하단 페이지 선택">
+        <button
+          className={activeFeedView === "all" ? "active" : ""}
+          onClick={() => setActiveFeedView("all")}
+          type="button"
+        >
+          피드
+        </button>
         <button
           className={activeFeedView === "photo" ? "active" : ""}
           onClick={() => setActiveFeedView("photo")}
@@ -671,20 +1588,29 @@ function App() {
           사진
         </button>
         <button
+          className="add-tab-button"
+          onClick={() => setIsAddOpen(true)}
+          type="button"
+        >
+          추가
+        </button>
+        <button
           className={activeFeedView === "todo" ? "active" : ""}
           onClick={() => setActiveFeedView("todo")}
           type="button"
         >
           투두
         </button>
+        <button
+          className={isProfileOpen ? "active" : ""}
+          onClick={() => setIsProfileOpen(true)}
+          type="button"
+        >
+          마이
+        </button>
       </div>
 
       {message && <p className="toast">{message}</p>}
-      {myActiveEntry?.photoDataUrl && (
-        <p className="storage-note">
-          사진은 업로드 시 WebP로 축소되어 이번 주 기록에만 저장됩니다.
-        </p>
-      )}
     </main>
   );
 }
