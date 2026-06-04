@@ -1313,21 +1313,21 @@ function App() {
             </div>
           )}
 
-          <section className="profile-manage-panel">
+          <section className="profile-manage-panel w-full">
             <div className="profile-tabs" aria-label="마이 보기 선택">
               <button
                 className={activeProfileTab === "todo" ? "active" : ""}
                 onClick={() => setActiveProfileTab("todo")}
                 type="button"
               >
-                내 할 일
+                내 할 일 🥹
               </button>
               <button
                 className={activeProfileTab === "photo" ? "active" : ""}
                 onClick={() => setActiveProfileTab("photo")}
                 type="button"
               >
-                내 밥
+                내 밥 💕
               </button>
             </div>
 
@@ -1499,8 +1499,8 @@ function App() {
           </section>
         </section>
 
-        <form className="profile-composer" onSubmit={addTodoFromProfile}>
-          <label className="profile-composer-photo-button">
+        <form className="profile-composer fixed gap-x-[10px] w-full flex items-center justify-between left-1/2 bottom-0 z-[18] -translate-x-1/2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] backdrop-blur-[14px] px-[14px] py-[16px]" onSubmit={addTodoFromProfile}>
+          <label className="profile-composer-photo-button flex items-center justify-center py-[7px]">
             <input
               accept="image/*"
               disabled={isSavingPhoto}
@@ -1510,12 +1510,14 @@ function App() {
             <PhotoIcon size={30}/>
           </label>
           <input
+            className={'flex-1 py-[10px]'}
             maxLength={255}
             onChange={(event) => setTodoText(event.target.value)}
             placeholder="해야할 일을 입력해요"
             value={todoText}
           />
           <button
+            className={'text-[13px]  py-[14px] px-[20px] bg-[#333]'}
             disabled={!todoText.trim()}
             onClick={() => {
               void addTodo().then((didAddTodo) => {
@@ -2075,7 +2077,7 @@ function App() {
       )}
 
       <form className="profile-composer fixed gap-x-[10px] w-full flex items-center justify-between left-1/2 bottom-0 z-[18] -translate-x-1/2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] backdrop-blur-[14px] px-[14px] py-[16px]" onSubmit={addTodoFromProfile}>
-        <label className="profile-composer-photo-button">
+        <label className="profile-composer-photo-button flex items-center justify-center py-[7px]">
           <input
             accept="image/*"
             disabled={isSavingPhoto}
@@ -2092,7 +2094,7 @@ function App() {
           value={todoText}
         />
         <button
-          className={'text-[13px] p-[14px] bg-[#333]'}
+          className={'text-[13px] py-[14px] px-[20px] bg-[#333]'}
           disabled={!todoText.trim()}
           onClick={() => {
             void addTodo().then((didAddTodo) => {
