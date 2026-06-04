@@ -20,7 +20,6 @@
 .setup-panel,
 .composer,
 .friend-card {
-  border: 1px solid var(--border);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -858,26 +857,23 @@ button:disabled,
 
 .slide-indicators button {
   width: 100%;
-  min-height: 44px;
+  min-height: 55px;
   padding: 0 10px;
   border-radius: 999px;
-  background: var(--surface);
   color: var(--text);
-  border: 1px solid var(--border);
   font-size: 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .slide-indicators .add-tab-button {
-  background: var(--accent);
-  color: var(--surface);
-  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .slide-indicators button.active {
   width: 100%;
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--surface);
+  color: black
 }
 
 .add-modal-backdrop {
@@ -958,4 +954,11 @@ button:disabled,
     flex-direction: column;
   }
 }
+  .bg-blue {
+    background-color: var(--accent);
+  }
+
+  .text-blue {
+    color: var(--accent);
+  }
 }

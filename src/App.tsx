@@ -18,6 +18,13 @@ import {
 } from "firebase/firestore";
 import "./App.css";
 import { auth, db } from "./firebase";
+import {HeartIcon} from "./assets/icon/HeartIcon.tsx";
+import {HomeIcon} from "./assets/icon/HomeIcon.tsx";
+import {PhotoIcon} from "./assets/icon/PhotoIcon.tsx";
+import {PlusIcon} from "./assets/icon/PlusIcon.tsx";
+import {TodoIcon} from "./assets/icon/TodoIcon.tsx";
+import {MyIcon} from "./assets/icon/MyIcon.tsx";
+import {BackIcon} from "./assets/icon/BackIcon.tsx";
 
 const MAX_MEMBERS = 7;
 const STORAGE_KEY = "study-room-code";
@@ -601,20 +608,6 @@ function App() {
     }
   };
 
-  const scrollToDay = (dayIndex: number) => {
-    activeDayRef.current = dayIndex;
-    isProgrammaticDayScrollRef.current = true;
-    setActiveDay(dayIndex);
-
-    const target = dayStripRef.current?.querySelector<HTMLElement>(
-      `[data-day-index="${dayIndex}"]`
-    );
-    target?.scrollIntoView({ behavior: "smooth", inline: "start" });
-    window.setTimeout(() => {
-      isProgrammaticDayScrollRef.current = false;
-    }, 420);
-  };
-
   const openStory = (uid: string) => {
     const firstStoryIndex = storyItems.findIndex(
       (storyItem) => storyItem.member.uid === uid
@@ -1009,11 +1002,11 @@ function App() {
       <main className="profile-screen">
         <header className="profile-header">
           <button
-            className="ghost-button"
+            className=""
             onClick={() => setIsProfileOpen(false)}
             type="button"
           >
-            뒤로
+            <BackIcon size={40}/>
           </button>
           <h1>마이</h1>
         </header>
@@ -1115,11 +1108,11 @@ function App() {
       <main className="profile-screen">
         <header className="profile-header">
           <button
-            className="ghost-button"
+            className=""
             onClick={() => setIsNotificationsOpen(false)}
             type="button"
           >
-            뒤로
+            <BackIcon size={40}/>
           </button>
           <h1>알림</h1>
         </header>
@@ -1164,21 +1157,21 @@ function App() {
             )}
           </button>
           <button
-            className="notification-button"
+            className="relative text-[12px]"
             onClick={() => setIsNotificationsOpen(true)}
             type="button"
             title="좋아요 알림"
           >
-            좋아요
+            <HeartIcon size={30} color={'black'}/>
             {likeNotifications.length > 0 && (
-              <span>{likeNotifications.length}</span>
+              <span className={'flex justify-center items-center absolute bottom-[22px] right-[-4px] rounded-full w-[16px] h-[16px] text-white bg-blue'}>{likeNotifications.length}</span>
             )}
           </button>
 
         </div>
       </header>
 
-      <nav className="day-tabs" aria-label="요일 선택">
+{/*      <nav className="day-tabs" aria-label="요일 선택">
         {weekDays.map((day, index) => (
           <button
             className={index === activeDay ? "active" : ""}
@@ -1189,7 +1182,7 @@ function App() {
             {day.shortLabel}
           </button>
         ))}
-      </nav>
+      </nav>*/}
 
       {storyGroups.length > 0 && (
         <section className="story-rail" aria-label="스토리">
@@ -1226,17 +1219,12 @@ function App() {
           setActiveDay(clampedIndex);
         }}
       >
-        {weekDays.map((day, dayIndex) => {
-          const dayEntries = members.map((member) => {
-            const entry = entries.find(
-              (candidate) =>
-                candidate.uid === member.uid && candidate.dayIndex === dayIndex
-            );
-            return { member, entry };
-          });
-          const feedItems = dayEntries
-            .flatMap<FeedItem>(({ member, entry }) => {
-              if (!entry) return [];
+        {(() => {
+          const feedItems = entries
+            .flatMap<FeedItem>((entry) => {
+              const member = members.find((member) => member.uid === entry.uid);
+
+              if (!member) return [];
 
               const items: FeedItem[] = [];
 
@@ -1246,7 +1234,9 @@ function App() {
               ) {
                 items.push({
                   type: "photo",
-                  key: `photo-${member.uid}-${entry.photoUpdatedAt ?? entry.updatedAt}`,
+                  key: `photo-${member.uid}-${entry.id}-${
+                    entry.photoUpdatedAt ?? entry.updatedAt
+                  }`,
                   member,
                   entry,
                   timestamp: entry.photoUpdatedAt ?? entry.updatedAt,
@@ -1284,22 +1274,12 @@ function App() {
             );
 
           return (
-            <article
-              className="day-slide"
-              data-day-index={dayIndex}
-              key={day.key}
-            >
-              <div className="day-title">
-                <div>
-                  <h2>{day.title}</h2>
-                </div>
-                <p>{feedItems.length}개 기록</p>
-              </div>
-
-              <div className="friend-feed">
+            <article className="day-slide">
+              <div className="friend-feed mt-[10px]">
                 {feedItems.length ? (
                   feedItems.map((item) => {
                     const isMine = item.member.uid === user.uid;
+                    const isToday = item.entry.dayIndex === getTodayIndex();
 
                     if (item.type === "photo") {
                       const photoLikes = likes.filter(
@@ -1307,6 +1287,7 @@ function App() {
                           like.itemType === "photo" &&
                           like.entryId === item.entry.id
                       );
+
                       const hasLikedPhoto = photoLikes.some(
                         (like) => like.fromUid === user.uid
                       );
@@ -1321,6 +1302,7 @@ function App() {
                                 {item.member.name.slice(0, 1)}
                               </div>
                             )}
+
                             <div>
                               <strong>{item.member.name}</strong>
                             </div>
@@ -1332,18 +1314,16 @@ function App() {
                               src={item.entry.photoDataUrl}
                               alt={`${item.member.name}의 하루 사진`}
                             />
-                            <span className="photo-time">
-                              {formatHour(item.entry.photoUpdatedAt)}
-                            </span>
                           </div>
+
                           <button
-                            className={`like-button ${
-                              hasLikedPhoto ? "active" : ""
+                            className={`flex gap-[2px] ${
+                              hasLikedPhoto ? "active text-blue" : ""
                             }`}
                             onClick={() => togglePhotoLike(item.entry)}
                             type="button"
                           >
-                            좋아요 {photoLikes.length}
+                            <HeartIcon filled={togglePhotoLike.length > 0}/> {photoLikes.length}
                           </button>
                         </section>
                       );
@@ -1355,6 +1335,7 @@ function App() {
                         like.entryId === item.entry.id &&
                         like.todoId === item.todo.id
                     );
+
                     const hasLikedTodo = todoLikes.some(
                       (like) => like.fromUid === user.uid
                     );
@@ -1367,12 +1348,13 @@ function App() {
                         >
                           <div className="friend-top">
                             {item.member.photoURL ? (
-                              <img src={item.member.photoURL} alt="" />
+                              <img src={item.member.photoURL} alt=""/>
                             ) : (
                               <div className="avatar-fallback">
                                 {item.member.name.slice(0, 1)}
                               </div>
                             )}
+
                             <div>
                               <strong>{item.member.name}</strong>
                               <span>{formatHour(item.todo.completedAt)}</span>
@@ -1380,17 +1362,16 @@ function App() {
                           </div>
 
                           <p>
-                            <strong>{item.todo.text}</strong> 완료!
+                            <strong>{item.todo.text}</strong> 다했다!
                           </p>
-
                           <button
-                            className={`like-button ${
-                              hasLikedTodo ? "active" : ""
+                            className={`flex gap-[2px] ${
+                              hasLikedTodo ? "active text-blue" : ""
                             }`}
                             onClick={() => toggleTodoLike(item.entry, item.todo.id)}
                             type="button"
                           >
-                            좋아요 {todoLikes.length}
+                            <HeartIcon filled={todoLikes.length > 0}/> {todoLikes.length}
                           </button>
                         </section>
                       );
@@ -1403,51 +1384,58 @@ function App() {
                         }`}
                         key={item.key}
                       >
-                      <div className="friend-top">
-                        {item.member.photoURL ? (
-                          <img src={item.member.photoURL} alt="" />
-                        ) : (
-                          <div className="avatar-fallback">
-                            {item.member.name.slice(0, 1)}
-                          </div>
-                        )}
-                        <div>
-                          <strong>{item.member.name}</strong>
-                          <span>{formatHour(item.todo.createdAt)}</span>
-                        </div>
-                      </div>
+                        <div className="friend-top">
+                          {item.member.photoURL ? (
+                            <img src={item.member.photoURL} alt=""/>
+                          ) : (
+                            <div className="avatar-fallback">
+                              {item.member.name.slice(0, 1)}
+                            </div>
+                          )}
 
-                      <div className="single-todo-row">
-                        {isMine && day.isToday ? (
-                          <input
-                            checked={item.todo.isDone}
-                            onChange={(event) =>
-                              updateTodo(item.todo.id, event.target.checked)
-                            }
-                            type="checkbox"
-                          />
-                        ) : (
-                          <span className="status-dot" />
-                        )}
-                        <span>{item.todo.text}</span>
-                        {isMine && day.isToday && (
-                          <button
-                            onClick={() => deleteTodo(item.todo.id)}
-                            title="삭제"
-                            type="button"
-                          >
-                            ×
-                          </button>
-                        )}
-                      </div>
-                      <button
-                        className={`like-button ${hasLikedTodo ? "active" : ""}`}
-                        onClick={() => toggleTodoLike(item.entry, item.todo.id)}
-                        type="button"
-                      >
-                        좋아요 {todoLikes.length}
-                      </button>
-                    </section>
+                          <div>
+                            <strong>{item.member.name}</strong>
+                            <span>{formatHour(item.todo.createdAt)}</span>
+                          </div>
+                        </div>
+
+                        <div className="single-todo-row">
+                          {isMine && isToday ? (
+                            <input
+                              checked={item.todo.isDone}
+                              onChange={(event) =>
+                                updateTodo(item.todo.id, event.target.checked)
+                              }
+                              type="checkbox"
+                            />
+                          ) : (
+                            <span className="status-dot"/>
+                          )}
+
+                          <span>{item.todo.text}</span>
+
+                          {isMine && isToday && (
+                            <button
+                              onClick={() => deleteTodo(item.todo.id)}
+                              title="삭제"
+                              type="button"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                        <button
+                          className={`flex gap-[2px] ${
+                            hasLikedTodo ? "active text-blue" : ""
+                          }`}
+                          onClick={() => toggleTodoLike(item.entry, item.todo.id)}
+                          type="button"
+                        >
+                          <HeartIcon filled={todoLikes.length > 0} /> {todoLikes.length}
+                        </button>
+
+
+                      </section>
                     );
                   })
                 ) : (
@@ -1456,7 +1444,7 @@ function App() {
               </div>
             </article>
           );
-        })}
+        })()}
       </section>
 
       {activeStoryItem && (
@@ -1578,35 +1566,35 @@ function App() {
           onClick={() => setActiveFeedView("all")}
           type="button"
         >
-          피드
+          <HomeIcon size={35}/>
         </button>
         <button
           className={activeFeedView === "photo" ? "active" : ""}
           onClick={() => setActiveFeedView("photo")}
           type="button"
         >
-          사진
+          <PhotoIcon size={35}/>
         </button>
         <button
           className="add-tab-button"
           onClick={() => setIsAddOpen(true)}
           type="button"
         >
-          추가
+          <PlusIcon size={50}/>
         </button>
         <button
           className={activeFeedView === "todo" ? "active" : ""}
           onClick={() => setActiveFeedView("todo")}
           type="button"
         >
-          투두
+          <TodoIcon size={35}/>
         </button>
         <button
           className={isProfileOpen ? "active" : ""}
           onClick={() => setIsProfileOpen(true)}
           type="button"
         >
-          마이
+          <MyIcon size={35}/>
         </button>
       </div>
 
