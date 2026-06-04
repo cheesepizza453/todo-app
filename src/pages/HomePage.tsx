@@ -1,7 +1,9 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, RefObject } from "react";
 import type { User } from "firebase/auth";
+import { CloseIcon } from "../assets/icon/CloseIcon";
 import { HeartIcon } from "../assets/icon/HeartIcon";
+import { PencilIcon } from "../assets/icon/PencilIcon";
 import { AppHeader } from "../components/AppHeader";
 import { StoryRail, StoryViewer } from "../components/AppComponents";
 import { TodoComposer } from "../components/TodoComposer";
@@ -155,6 +157,7 @@ type HomePageProps = {
   ) => Promise<boolean>;
   onAddTodo: () => Promise<boolean>;
   onCloseStory: () => void;
+  onDeleteComment: (commentId: string) => void | Promise<void>;
   onDeleteTodo: (todoId: string, dayIndex: number) => void;
   onNextStory: () => void;
   onOpenNotifications: () => void;
@@ -175,6 +178,7 @@ type HomePageProps = {
     dayIndex: number
   ) => void | Promise<void>;
   onToggleTodoLike: (entry: Entry, todoId: string) => void | Promise<void>;
+  onUpdateComment: (commentId: string, text: string) => Promise<boolean>;
   onUpdateTodoText: (todoId: string, dayIndex: number) => void | Promise<void>;
   storyGroups: StoryGroup[];
   storyItems: StoryItem[];
@@ -184,26 +188,32 @@ type HomePageProps = {
 
 type CommentPanelProps = {
   comments: CommentDocument[];
-  formatHour: (timestamp?: number | null) => string;
   itemType: "photo" | "todo";
   entryId: string;
   todoId: string;
   ownerUid: string;
   dayIndex: number;
   onAddComment: HomePageProps["onAddComment"];
+  onDeleteComment: HomePageProps["onDeleteComment"];
+  onUpdateComment: HomePageProps["onUpdateComment"];
+  userUid: string;
 };
 
 const CommentPanel = ({
   comments,
   dayIndex,
   entryId,
-  formatHour,
   itemType,
   onAddComment,
+  onDeleteComment,
+  onUpdateComment,
   ownerUid,
   todoId,
+  userUid,
 }: CommentPanelProps) => {
   const commentInputRef = useRef<HTMLInputElement | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState("");
+  const [editingCommentText, setEditingCommentText] = useState("");
   const itemComments = comments
     .filter(
       (comment) =>
@@ -248,12 +258,75 @@ const CommentPanel = ({
                 <span>{comment.fromName.slice(0, 1)}</span>
               )}
               <div>
-                <p>
-                  <strong>{comment.fromName}</strong>
-                  {comment.text}
-                </p>
-                <time>{formatHour(comment.createdAt)}</time>
+                {editingCommentId === comment.id ? (
+                  <form
+                    className="comment-edit-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void onUpdateComment(
+                        comment.id,
+                        editingCommentText
+                      ).then((didUpdateComment) => {
+                        if (didUpdateComment) {
+                          setEditingCommentId("");
+                          setEditingCommentText("");
+                        }
+                      });
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      maxLength={120}
+                      onChange={(event) =>
+                        setEditingCommentText(event.target.value)
+                      }
+                      value={editingCommentText}
+                    />
+                    <button
+                      disabled={!editingCommentText.trim()}
+                      type="submit"
+                      title="댓글 수정 저장"
+                    >
+                      저장
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <p>
+                      <strong>{comment.fromName}</strong>
+                      {comment.text}
+                    </p>
+                    <time>{formatCommentDate(comment.createdAt)}</time>
+                  </>
+                )}
               </div>
+              {comment.fromUid === userUid && (
+                <div className="comment-actions">
+                  <button
+                    onClick={() => {
+                      if (editingCommentId === comment.id) {
+                        setEditingCommentId("");
+                        setEditingCommentText("");
+                        return;
+                      }
+
+                      setEditingCommentId(comment.id);
+                      setEditingCommentText(comment.text);
+                    }}
+                    title="댓글 수정"
+                    type="button"
+                  >
+                    <PencilIcon size={14} />
+                  </button>
+                  <button
+                    onClick={() => onDeleteComment(comment.id)}
+                    title="댓글 삭제"
+                    type="button"
+                  >
+                    <CloseIcon size={14} />
+                  </button>
+                </div>
+              )}
             </article>
           ))}
         </div>
@@ -271,6 +344,15 @@ const CommentPanel = ({
       </form>
     </section>
   );
+};
+
+const formatCommentDate = (timestamp?: number | null) => {
+  if (!timestamp) return "";
+
+  const date = new Date(timestamp);
+  return `${String(date.getFullYear()).slice(2)}년 ${
+    date.getMonth() + 1
+  }월 ${date.getDate()}일 ${date.getHours()}시 ${date.getMinutes()}분`;
 };
 
 export const HomePage = ({
@@ -296,6 +378,7 @@ export const HomePage = ({
   onAddComment,
   onAddTodo,
   onCloseStory,
+  onDeleteComment,
   onDeleteTodo,
   onNextStory,
   onOpenNotifications,
@@ -312,6 +395,7 @@ export const HomePage = ({
   onTogglePhotoLike,
   onToggleTodo,
   onToggleTodoLike,
+  onUpdateComment,
   onUpdateTodoText,
   storyGroups,
   storyItems,
@@ -464,11 +548,13 @@ export const HomePage = ({
                           comments={comments}
                           dayIndex={item.photo.dayIndex}
                           entryId={item.photo.id}
-                          formatHour={formatHour}
                           itemType="photo"
                           onAddComment={onAddComment}
+                          onDeleteComment={onDeleteComment}
+                          onUpdateComment={onUpdateComment}
                           ownerUid={item.photo.uid}
                           todoId=""
+                          userUid={user.uid}
                         />
                       </section>
                     );
@@ -543,11 +629,13 @@ export const HomePage = ({
                           comments={comments}
                           dayIndex={item.entry.dayIndex}
                           entryId={item.entry.id}
-                          formatHour={formatHour}
                           itemType="todo"
                           onAddComment={onAddComment}
+                          onDeleteComment={onDeleteComment}
+                          onUpdateComment={onUpdateComment}
                           ownerUid={item.entry.uid}
                           todoId={item.todo.id}
+                          userUid={user.uid}
                         />
                         <figure className="absolute bottom-[-30px] right-[-20px] w-[170px] inline-block opacity-45">
                           <img className="w-full" src="/stamp.png" alt="스탬프" />
@@ -698,11 +786,13 @@ export const HomePage = ({
                               comments={comments}
                               dayIndex={item.entry.dayIndex}
                               entryId={item.entry.id}
-                              formatHour={formatHour}
                               itemType="todo"
                               onAddComment={onAddComment}
+                              onDeleteComment={onDeleteComment}
+                              onUpdateComment={onUpdateComment}
                               ownerUid={item.entry.uid}
                               todoId={item.todo.id}
+                              userUid={user.uid}
                             />
                           </article>
                           <div className="profile-item-actions">
@@ -785,11 +875,13 @@ export const HomePage = ({
                         comments={comments}
                         dayIndex={item.entry.dayIndex}
                         entryId={item.entry.id}
-                        formatHour={formatHour}
                         itemType="todo"
                         onAddComment={onAddComment}
+                        onDeleteComment={onDeleteComment}
+                        onUpdateComment={onUpdateComment}
                         ownerUid={item.entry.uid}
                         todoId={item.todo.id}
+                        userUid={user.uid}
                       />
                     </section>
                   );

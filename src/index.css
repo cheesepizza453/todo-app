@@ -316,7 +316,7 @@ button:disabled,
 .profile-header {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 5px;
   margin-bottom: 16px;
 }
 
@@ -500,6 +500,7 @@ button:disabled,
   overflow-x: auto;
   overflow-y: hidden;
   width: 100%;
+  max-width: 100%;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   border-radius: 6px;
@@ -513,9 +514,27 @@ button:disabled,
 
 .feed-todo-card-body {
   flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   scroll-snap-align: start;
   box-shadow: none;
   cursor: pointer;
+}
+
+.todo-feed-card,
+.todo-feed-card .friend-card,
+.todo-feed-card .profile-todo-block,
+.todo-feed-card .single-todo-row,
+.todo-feed-card .comment-panel {
+  min-width: 0;
+}
+
+.todo-feed-card span,
+.todo-complete-card strong {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .todo-feed-card.done .feed-todo-card-body,
@@ -689,7 +708,7 @@ button:disabled,
 
 .notification-item {
   display: grid;
-  grid-template-columns: 42px 1fr;
+  grid-template-columns: 42px 1fr auto;
   gap: 10px;
   align-items: center;
   border: 1px solid var(--border);
@@ -728,6 +747,26 @@ button:disabled,
 }
 
 .notification-item time {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.notification-delete-button {
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.notification-clear-button {
+  position: absolute;
+  right: 18px;
+  min-height: 30px;
+  padding: 0 10px;
+  background: transparent;
   color: var(--text);
   font-size: 12px;
 }
@@ -1125,6 +1164,8 @@ button:disabled,
   text-align: left;
   padding: 8px 4px 8px 8px;
   font-size: 15px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .single-todo-row.clickable {
@@ -1182,7 +1223,7 @@ button:disabled,
 
 .comment-item {
   display: grid;
-  grid-template-columns: 26px 1fr;
+  grid-template-columns: 26px 1fr auto;
   gap: 7px;
   align-items: start;
 }
@@ -1233,9 +1274,9 @@ button:disabled,
 
 .comment-form input {
   min-width: 0;
-  min-height: 34px;
+  min-height: 42px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 6px;
   background: var(--paper);
   padding: 0 12px;
   font-size: 12px;
@@ -1247,6 +1288,45 @@ button:disabled,
   background: var(--text-strong);
   color: white;
   font-size: 12px;
+}
+
+.comment-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.comment-actions button {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.comment-edit-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+
+.comment-edit-form input {
+  min-width: 0;
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--paper);
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.comment-edit-form button {
+  min-height: 30px;
+  padding: 0 8px;
+  background: var(--text-strong);
+  color: white;
+  font-size: 11px;
 }
 
 .status-dot {

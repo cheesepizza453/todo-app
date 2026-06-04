@@ -24,6 +24,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 
 const MAX_MEMBERS = 20;
 const STORAGE_KEY = "study-room-code";
+const DISMISSED_NOTIFICATIONS_KEY = "dismissed-like-notifications";
 const PHOTO_SIZE_LIMIT = 620_000;
 const STORY_VISIBLE_MS = 24 * 60 * 60 * 1000;
 const MAIN_ROOM_CODE = "MAIN";
@@ -211,9 +212,24 @@ const getWeekDays = (): Day[] => {
   });
 };
 
+const sanitizeRoomCode = (code: string) =>
+  code.trim().replaceAll("/", "-").slice(0, 60).toUpperCase();
+
+const getHashRoomCodeFromUrl = () => {
+  const hash = window.location.hash.replace(/^#/, "");
+  if (!hash) return "";
+
+  try {
+    return sanitizeRoomCode(decodeURIComponent(hash));
+  } catch {
+    return sanitizeRoomCode(hash);
+  }
+};
+
 const getInviteCodeFromUrl = () =>
-  new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase() ??
-  "";
+  sanitizeRoomCode(
+    new URLSearchParams(window.location.search).get("room") ?? ""
+  ) || getHashRoomCodeFromUrl();
 
 const getIsDemoModeFromUrl = () =>
   new URLSearchParams(window.location.search).get("demo") === "1";
@@ -222,6 +238,15 @@ const formatHour = (timestamp?: number | null) => {
   if (!timestamp) return "";
 
   return `${new Date(timestamp).getHours()}시`;
+};
+
+const formatDateTime = (timestamp?: number | null) => {
+  if (!timestamp) return "";
+
+  const date = new Date(timestamp);
+  return `${String(date.getFullYear()).slice(2)}년 ${
+    date.getMonth() + 1
+  }월 ${date.getDate()}일 ${date.getHours()}시 ${date.getMinutes()}분`;
 };
 
 const formatShortDate = (timestamp?: number | null) => {
@@ -281,7 +306,7 @@ const createDemoUser = () =>
     photoURL: "",
   }) as User;
 
-const createDemoData = (weekId: string) => {
+const createDemoData = (weekId: string, roomCode = "DEMO") => {
   const now = getTimestamp();
   const todayIndex = getTodayIndex();
   const dayBefore = Math.max(0, todayIndex - 1);
@@ -315,7 +340,7 @@ const createDemoData = (weekId: string) => {
   };
 
   const room: Room = {
-    id: "DEMO",
+    id: roomCode,
     name: `${MAIN_ROOM_NAME} 데모`,
     ownerId: "demo-you",
     weekId,
@@ -650,9 +675,11 @@ const resizeProfileImage = (file: File): Promise<string> =>
 function App() {
   const isDemoMode = useMemo(() => getIsDemoModeFromUrl(), []);
   const weekId = useMemo(() => getWeekId(), []);
+  const [inviteCode] = useState(() => getInviteCodeFromUrl());
+  const targetRoomCode = inviteCode || MAIN_ROOM_CODE;
   const demoData = useMemo(
-    () => (isDemoMode ? createDemoData(weekId) : null),
-    [isDemoMode, weekId]
+    () => (isDemoMode ? createDemoData(weekId, targetRoomCode) : null),
+    [isDemoMode, targetRoomCode, weekId]
   );
   const [user, setUser] = useState<User | null>(() =>
     isDemoMode ? createDemoUser() : null
@@ -666,8 +693,6 @@ function App() {
   const [comments, setComments] = useState<CommentDocument[]>(
     () => demoData?.comments ?? []
   );
-  const [inviteCode] = useState(() => getInviteCodeFromUrl());
-  const targetRoomCode = inviteCode || MAIN_ROOM_CODE;
   const [roomCode, setRoomCode] = useState(
     () => targetRoomCode || localStorage.getItem(STORAGE_KEY) || MAIN_ROOM_CODE
   );
@@ -686,12 +711,35 @@ function App() {
   const [isSavingProfilePhoto, setIsSavingProfilePhoto] = useState(false);
   const [isSavingPhoto, setIsSavingPhoto] = useState(false);
   const [message, setMessage] = useState("");
+  const [dismissedNotificationIdsByKey, setDismissedNotificationIdsByKey] =
+    useState<Record<string, string[]>>({});
   const [storyNow, setStoryNow] = useState(() => getTimestamp());
   const dayStripRef = useRef<HTMLDivElement | null>(null);
   const activeDayRef = useRef(activeDay);
   const isProgrammaticDayScrollRef = useRef(false);
 
   const weekDays = useMemo(() => getWeekDays(), []);
+
+  const notificationStorageKey =
+    user && room
+      ? `${DISMISSED_NOTIFICATIONS_KEY}:${room.id}:${user.uid}`
+      : "";
+  const dismissedNotificationIds = useMemo(() => {
+    if (!notificationStorageKey) return [];
+
+    if (dismissedNotificationIdsByKey[notificationStorageKey]) {
+      return dismissedNotificationIdsByKey[notificationStorageKey];
+    }
+
+    try {
+      const savedIds = JSON.parse(
+        localStorage.getItem(notificationStorageKey) ?? "[]"
+      );
+      return Array.isArray(savedIds) ? savedIds : [];
+    } catch {
+      return [];
+    }
+  }, [dismissedNotificationIdsByKey, notificationStorageKey]);
 
   useEffect(() => {
     if (isDemoMode) {
@@ -1418,6 +1466,51 @@ function App() {
     return true;
   };
 
+  const updateComment = async (commentId: string, text: string) => {
+    if (!room) return false;
+
+    const trimmedText = text.trim();
+    if (!trimmedText) return false;
+
+    const currentComment = comments.find((comment) => comment.id === commentId);
+    if (!currentComment || currentComment.fromUid !== user?.uid) return false;
+
+    if (isDemoMode) {
+      setComments((currentComments) =>
+        currentComments.map((comment) =>
+          comment.id === commentId
+            ? { ...comment, text: trimmedText }
+            : comment
+        )
+      );
+      return true;
+    }
+
+    await setDoc(
+      doc(db, "rooms", room.id, "comments", commentId),
+      { text: trimmedText },
+      { merge: true }
+    );
+
+    return true;
+  };
+
+  const deleteComment = async (commentId: string) => {
+    if (!room) return;
+
+    const currentComment = comments.find((comment) => comment.id === commentId);
+    if (!currentComment || currentComment.fromUid !== user?.uid) return;
+
+    if (isDemoMode) {
+      setComments((currentComments) =>
+        currentComments.filter((comment) => comment.id !== commentId)
+      );
+      return;
+    }
+
+    await deleteDoc(doc(db, "rooms", room.id, "comments", commentId));
+  };
+
   const deleteTodo = async (todoId: string, dayIndex = activeDay) => {
     const currentEntry = entries.find(
       (entry) => entry.uid === user?.uid && entry.dayIndex === dayIndex
@@ -1738,6 +1831,37 @@ function App() {
           secondNotification.createdAt - firstNotification.createdAt
       );
   }, [likes, user, weekDays]);
+  const visibleLikeNotifications = useMemo(
+    () =>
+      likeNotifications.filter(
+        (notification) => !dismissedNotificationIds.includes(notification.id)
+      ),
+    [dismissedNotificationIds, likeNotifications]
+  );
+
+  const saveDismissedNotificationIds = (nextIds: string[]) => {
+    if (notificationStorageKey) {
+      setDismissedNotificationIdsByKey((currentIdsByKey) => ({
+        ...currentIdsByKey,
+        [notificationStorageKey]: nextIds,
+      }));
+
+      localStorage.setItem(notificationStorageKey, JSON.stringify(nextIds));
+    }
+  };
+
+  const deleteNotification = (notificationId: string) => {
+    if (dismissedNotificationIds.includes(notificationId)) return;
+
+    saveDismissedNotificationIds([
+      ...dismissedNotificationIds,
+      notificationId,
+    ]);
+  };
+
+  const deleteAllNotifications = () => {
+    saveDismissedNotificationIds(likeNotifications.map((notification) => notification.id));
+  };
 
   if (!user) {
     return <AuthScreen onLogin={() => void login()} />;
@@ -1796,9 +1920,11 @@ function App() {
   if (isNotificationsOpen) {
     return (
       <NotificationsPage
-        formatHour={formatHour}
-        likeNotifications={likeNotifications}
+        formatHour={formatDateTime}
+        likeNotifications={visibleLikeNotifications}
         onBack={() => setIsNotificationsOpen(false)}
+        onDeleteAll={deleteAllNotifications}
+        onDeleteNotification={deleteNotification}
       />
     );
   }
@@ -1819,7 +1945,7 @@ function App() {
       formatTodoPeriod={formatTodoPeriod}
       isProgrammaticDayScrollRef={isProgrammaticDayScrollRef}
       isSavingPhoto={isSavingPhoto}
-      likeNotifications={likeNotifications}
+      likeNotifications={visibleLikeNotifications}
       likes={likes}
       members={members}
       message={message}
@@ -1827,6 +1953,7 @@ function App() {
       onAddTodo={addTodo}
       onAddComment={addComment}
       onCloseStory={closeStory}
+      onDeleteComment={deleteComment}
       onDeleteTodo={deleteTodo}
       onNextStory={showNextStory}
       onOpenNotifications={() => setIsNotificationsOpen(true)}
@@ -1843,6 +1970,7 @@ function App() {
       onTogglePhotoLike={togglePhotoLike}
       onToggleTodo={updateTodo}
       onToggleTodoLike={toggleTodoLike}
+      onUpdateComment={updateComment}
       onUpdateTodoText={updateTodoText}
       storyGroups={storyGroups}
       storyItems={storyItems}
