@@ -19,29 +19,17 @@ import {
 import "./App.css";
 import { auth, db } from "./firebase";
 import {HeartIcon} from "./assets/icon/HeartIcon.tsx";
-import {HomeIcon} from "./assets/icon/HomeIcon.tsx";
 import {PhotoIcon} from "./assets/icon/PhotoIcon.tsx";
 import {PlusIcon} from "./assets/icon/PlusIcon.tsx";
-import {TodoIcon} from "./assets/icon/TodoIcon.tsx";
-import {MyIcon} from "./assets/icon/MyIcon.tsx";
 import {BackIcon} from "./assets/icon/BackIcon.tsx";
 import {PencilIcon} from "./assets/icon/PencilIcon.tsx";
 
-const MAX_MEMBERS = 7;
+const MAX_MEMBERS = 20;
 const STORAGE_KEY = "study-room-code";
 const PHOTO_SIZE_LIMIT = 620_000;
+const STORY_VISIBLE_MS = 24 * 60 * 60 * 1000;
 const MAIN_ROOM_CODE = "MAIN";
 const MAIN_ROOM_NAME = "뭐해";
-const WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
-const WEEKDAY_FULL_LABELS = [
-  "월요일",
-  "화요일",
-  "수요일",
-  "목요일",
-  "금요일",
-  "토요일",
-  "일요일",
-];
 
 const getTimestamp = () => new Date().getTime();
 
@@ -85,6 +73,20 @@ type Entry = {
   updatedAt: number;
 };
 
+type PhotoPost = {
+  id: string;
+  uid: string;
+  userName: string;
+  userPhotoURL: string;
+  weekId: string;
+  dayIndex: number;
+  dataUrl: string;
+  createdAt: number;
+  updatedAt: number;
+  source?: "entry" | "post";
+  entryId?: string;
+};
+
 type Like = {
   uid: string;
   name: string;
@@ -94,21 +96,18 @@ type Like = {
 
 type Day = {
   date: Date;
-  label: string;
-  shortLabel: string;
   title: string;
   key: string;
-  isToday: boolean;
 };
 
-type FeedView = "all" | "photo" | "todo";
+type ProfileTab = "todo" | "photo";
 
 type FeedItem =
   | {
       type: "photo";
       key: string;
       member: Member;
-      entry: Entry;
+      photo: PhotoPost;
       timestamp: number;
     }
   | {
@@ -153,15 +152,25 @@ type LikeDocument = {
 
 type StoryGroup = {
   member: Member;
-  entries: Entry[];
+  items: StoryItem[];
 };
 
-type StoryItem = {
-  key: string;
-  member: Member;
-  entry: Entry;
-  timestamp: number;
-};
+type StoryItem =
+  | {
+      type: "photo";
+      key: string;
+      member: Member;
+      photo: PhotoPost;
+      timestamp: number;
+    }
+  | {
+      type: "todoDone";
+      key: string;
+      member: Member;
+      entry: Entry;
+      todo: Todo;
+      timestamp: number;
+    };
 
 const makeMember = (user: User): Member => ({
   uid: user.uid,
@@ -186,13 +195,6 @@ const toDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const toCompactDateKey = (date: Date) => {
-  const year = String(date.getFullYear()).slice(2);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}${month}${day}`;
-};
-
 const getWeekId = (date = new Date()) => {
   const weekStart = getWeekStart(date);
   return toDateKey(weekStart);
@@ -214,12 +216,9 @@ const getWeekDays = (): Day[] => {
     return {
       date,
       key: toDateKey(date),
-      label: WEEKDAY_LABELS[index],
-      shortLabel: WEEKDAY_LABELS[index],
-      title: `${toCompactDateKey(date)}${WEEKDAY_FULL_LABELS[index]}${
-        date.toDateString() === today.toDateString() ? " 오늘!" : ""
+      title: `${formatDotDate(date.getTime())}${
+        date.toDateString() === today.toDateString() ? " 오늘" : ""
       }`,
-      isToday: date.toDateString() === today.toDateString(),
     };
   });
 };
@@ -234,11 +233,36 @@ const formatHour = (timestamp?: number | null) => {
   return `${new Date(timestamp).getHours()}시`;
 };
 
-const formatMonthDay = (timestamp?: number | null) => {
+const formatShortDate = (timestamp?: number | null) => {
   if (!timestamp) return "";
 
   const date = new Date(timestamp);
-  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+  return `${String(date.getFullYear()).slice(2)}년 ${
+    date.getMonth() + 1
+  }월 ${date.getDate()}일`;
+};
+
+const formatTodoDate = (timestamp?: number | null) => {
+  if (!timestamp) return "";
+
+  const date = new Date(timestamp);
+  return `${String(date.getFullYear()).slice(2)}년 ${
+    date.getMonth() + 1
+  }월 ${date.getDate()}일`;
+};
+
+const formatTodoPeriod = (todo: Todo) =>
+  `${formatTodoDate(todo.createdAt)} 시작${
+    todo.completedAt ? ` | ${formatTodoDate(todo.completedAt)} 완료` : ""
+  }`;
+
+const formatDotDate = (timestamp?: number | null) => {
+  if (!timestamp) return "";
+
+  const date = new Date(timestamp);
+  return `${String(date.getFullYear()).slice(2)}.${String(
+    date.getMonth() + 1
+  ).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 };
 
 const makeLike = (user: User, member?: Member | null): Like => ({
@@ -250,6 +274,14 @@ const makeLike = (user: User, member?: Member | null): Like => ({
 
 const getLikeId = (itemType: "photo" | "todo", entryId: string, itemId: string, uid: string) =>
   `${itemType}_${entryId}_${itemId}_${uid}`;
+
+const makeId = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+};
 
 const enterOrCreateRoom = async (user: User, code: string, weekId: string) => {
   await runTransaction(db, async (transaction) => {
@@ -276,7 +308,7 @@ const enterOrCreateRoom = async (user: User, code: string, weekId: string) => {
     const isAlreadyMember = Boolean(members[user.uid]);
 
     if (!isAlreadyMember && Object.keys(members).length >= MAX_MEMBERS) {
-      throw new Error("이 방은 이미 8명이 꽉 찼어요.");
+      throw new Error("이 방은 이미 20명이 꽉 찼어요!");
     }
 
     transaction.update(roomRef, {
@@ -338,7 +370,7 @@ const resizeImage = (file: File): Promise<string> =>
         return;
       }
 
-      reject(new Error("사진 용량을 충분히 줄이지 못했어요."));
+      reject(new Error("사진 용량을 충분히 줄이지 못했어요!"));
     };
 
     reader.readAsDataURL(file);
@@ -385,6 +417,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [photoPosts, setPhotoPosts] = useState<PhotoPost[]>([]);
   const [likes, setLikes] = useState<LikeDocument[]>([]);
   const [inviteCode] = useState(() => getInviteCodeFromUrl());
   const targetRoomCode = inviteCode || MAIN_ROOM_CODE;
@@ -394,16 +427,19 @@ function App() {
   const [todoText, setTodoText] = useState("");
   const [nicknameText, setNicknameText] = useState("");
   const [activeDay, setActiveDay] = useState(() => getTodayIndex());
-  const [activeFeedView, setActiveFeedView] = useState<FeedView>("all");
+  const [activeProfileTab, setActiveProfileTab] = useState<ProfileTab>("todo");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditingNickname, setIsEditingNickname] = useState(false);
+  const [editingTodoKey, setEditingTodoKey] = useState("");
+  const [editingTodoText, setEditingTodoText] = useState("");
+  const [openPhotoMenuId, setOpenPhotoMenuId] = useState("");
   const [activeStoryUid, setActiveStoryUid] = useState<string | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
   const [isSavingProfilePhoto, setIsSavingProfilePhoto] = useState(false);
   const [isSavingPhoto, setIsSavingPhoto] = useState(false);
   const [message, setMessage] = useState("");
+  const [storyNow, setStoryNow] = useState(() => getTimestamp());
   const dayStripRef = useRef<HTMLDivElement | null>(null);
   const activeDayRef = useRef(activeDay);
   const isProgrammaticDayScrollRef = useRef(false);
@@ -425,7 +461,7 @@ function App() {
         .catch((error) => {
           setRoom(null);
           setMessage(
-            error instanceof Error ? error.message : "방 입장에 실패했어요."
+            error instanceof Error ? error.message : "방 입장에 실패했어요!"
           );
         });
     });
@@ -443,7 +479,7 @@ function App() {
       (snapshot) => {
         if (!snapshot.exists()) {
           setRoom(null);
-          setMessage("방을 준비하는 중이에요.");
+          setMessage("방을 준비하는 중이에요!");
           return;
         }
 
@@ -452,7 +488,7 @@ function App() {
       },
       () => {
         setRoom(null);
-        setMessage("방을 불러올 권한이 없어요. Firestore 규칙을 확인해주세요.");
+        setMessage("방을 불러올 권한이 없어요. Firestore 규칙을 확인해주세요!");
       }
     );
 
@@ -486,6 +522,29 @@ function App() {
       return;
     }
 
+    const photosQuery = query(
+      collection(db, "rooms", room.id, "photos"),
+      where("weekId", "==", weekId)
+    );
+
+    const unsubscribe = onSnapshot(photosQuery, (snapshot) => {
+      const nextPhotoPosts = snapshot.docs.map((photoDoc) => ({
+        id: photoDoc.id,
+        source: "post" as const,
+        ...photoDoc.data(),
+      })) as PhotoPost[];
+
+      setPhotoPosts(nextPhotoPosts);
+    });
+
+    return () => unsubscribe();
+  }, [room, weekId]);
+
+  useEffect(() => {
+    if (!room) {
+      return;
+    }
+
     const likesQuery = query(
       collection(db, "rooms", room.id, "likes"),
       where("weekId", "==", weekId)
@@ -508,6 +567,24 @@ function App() {
   }, [activeDay]);
 
   useEffect(() => {
+    const timer = window.setInterval(() => {
+      setStoryNow(getTimestamp());
+    }, 60_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!message) return;
+
+    const timer = window.setTimeout(() => {
+      setMessage("");
+    }, 2000);
+
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
+  useEffect(() => {
     if (!room || isProfileOpen || isNotificationsOpen) return;
 
     const dayStrip = dayStripRef.current;
@@ -527,8 +604,8 @@ function App() {
     } catch (error) {
       const message =
         error instanceof Error && error.message.includes("unauthorized-domain")
-          ? "Firebase Auth에서 현재 주소를 허용하지 않았어요. localhost로 접속하거나 Firebase Authorized domains에 127.0.0.1을 추가해주세요."
-          : "로그인에 실패했어요. 잠시 뒤 다시 시도해주세요.";
+          ? "Firebase Auth에서 현재 주소를 허용하지 않았어요. localhost로 접속하거나 Firebase Authorized domains에 127.0.0.1을 추가해주세요!"
+          : "로그인에 실패했어요. 잠시 뒤 다시 시도해주세요!";
 
       setMessage(message);
     }
@@ -547,18 +624,18 @@ function App() {
         const roomSnapshot = await transaction.get(roomRef);
 
         if (!roomSnapshot.exists()) {
-          throw new Error("방을 찾을 수 없어요.");
+          throw new Error("방을 찾을 수 없어요!");
         }
 
         const data = roomSnapshot.data() as Omit<Room, "id">;
         const currentMember = data.members?.[user.uid];
 
         if (!currentMember) {
-          throw new Error("방 멤버 정보를 찾을 수 없어요.");
+          throw new Error("방 멤버 정보를 찾을 수 없어요!");
         }
 
         if (currentMember.nameChangedAt) {
-          throw new Error("닉네임은 한 번만 바꿀 수 있어요.");
+          throw new Error("닉네임은 한 번만 바꿀 수 있어요!");
         }
 
         transaction.update(roomRef, {
@@ -568,11 +645,11 @@ function App() {
       });
 
       setNicknameText("");
-      setMessage("닉네임을 바꿨어요.");
+      setMessage("닉네임을 바꿨어요!");
       setIsEditingNickname(false);
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "닉네임 변경에 실패했어요."
+        error instanceof Error ? error.message : "닉네임 변경에 실패했어요!"
       );
     }
   };
@@ -590,7 +667,7 @@ function App() {
         const roomSnapshot = await transaction.get(roomRef);
 
         if (!roomSnapshot.exists()) {
-          throw new Error("방을 찾을 수 없어요.");
+          throw new Error("방을 찾을 수 없어요!");
         }
 
         transaction.update(roomRef, {
@@ -603,7 +680,7 @@ function App() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "프로필 사진 변경에 실패했어요."
+          : "프로필 사진 변경에 실패했어요!"
       );
     } finally {
       setIsSavingProfilePhoto(false);
@@ -672,25 +749,42 @@ function App() {
 
   const addTodo = async () => {
     const text = todoText.trim();
-    if (!text) return;
+    if (!text) return false;
     const todayIndex = getTodayIndex();
 
-    const currentEntry = entries.find(
-      (entry) => entry.uid === user?.uid && entry.dayIndex === todayIndex
-    );
-    const nextTodos = [
-      ...(currentEntry?.todos ?? []),
-      {
-        id: crypto.randomUUID(),
-        text,
-        isDone: false,
-        createdAt: getTimestamp(),
-        completedAt: null,
-      },
-    ];
+    try {
+      const currentEntry = entries.find(
+        (entry) => entry.uid === user?.uid && entry.dayIndex === todayIndex
+      );
+      const nextTodos = [
+        ...(currentEntry?.todos ?? []),
+        {
+          id: makeId(),
+          text,
+          isDone: false,
+          createdAt: getTimestamp(),
+          completedAt: null,
+        },
+      ];
 
-    await upsertMyEntry({ todos: nextTodos }, todayIndex);
-    setTodoText("");
+      await upsertMyEntry({ todos: nextTodos }, todayIndex);
+      setTodoText("");
+      return true;
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "할 일 추가에 실패했어요!"
+      );
+      return false;
+    }
+  };
+
+  const addTodoFromProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const didAddTodo = await addTodo();
+
+    if (didAddTodo) {
+      setActiveProfileTab("todo");
+    }
   };
 
   const updateTodo = async (
@@ -721,10 +815,36 @@ function App() {
     );
   };
 
-  const togglePhotoLike = async (entry: Entry) => {
+  const updateTodoText = async (todoId: string, dayIndex: number) => {
+    const text = editingTodoText.trim();
+    if (!room || !text) return;
+
+    const currentEntry = entries.find(
+      (entry) => entry.uid === user?.uid && entry.dayIndex === dayIndex
+    );
+    if (!currentEntry) return;
+
+    const updatedAt = getTimestamp();
+
+    await setDoc(
+      doc(db, "rooms", room.id, "entries", currentEntry.id),
+      {
+        todos: currentEntry.todos.map((todo) =>
+          todo.id === todoId ? { ...todo, text, createdAt: updatedAt } : todo
+        ),
+        updatedAt,
+      },
+      { merge: true }
+    );
+
+    setEditingTodoKey("");
+    setEditingTodoText("");
+  };
+
+  const togglePhotoLike = async (photo: PhotoPost) => {
     if (!user || !room) return;
 
-    const likeId = getLikeId("photo", entry.id, "photo", user.uid);
+    const likeId = getLikeId("photo", photo.id, "photo", user.uid);
     const likeRef = doc(db, "rooms", room.id, "likes", likeId);
     const existingLike = likes.find((like) => like.id === likeId);
 
@@ -736,14 +856,14 @@ function App() {
     const like = makeLike(user, myMember);
     await setDoc(likeRef, {
       itemType: "photo",
-      entryId: entry.id,
+      entryId: photo.id,
       todoId: "",
-      ownerUid: entry.uid,
+      ownerUid: photo.uid,
       fromUid: like.uid,
       fromName: like.name,
       fromPhotoURL: like.photoURL,
-      weekId: entry.weekId,
-      dayIndex: entry.dayIndex,
+      weekId: photo.weekId,
+      dayIndex: photo.dayIndex,
       itemText: "사진",
       createdAt: like.createdAt,
     });
@@ -780,84 +900,182 @@ function App() {
     });
   };
 
-  const deleteTodo = async (todoId: string) => {
+  const deleteTodo = async (todoId: string, dayIndex = activeDay) => {
     const currentEntry = entries.find(
-      (entry) => entry.uid === user?.uid && entry.dayIndex === activeDay
+      (entry) => entry.uid === user?.uid && entry.dayIndex === dayIndex
     );
     if (!currentEntry) return;
 
     await upsertMyEntry({
       todos: currentEntry.todos.filter((todo) => todo.id !== todoId),
-    });
+    }, dayIndex);
   };
 
-  const uploadPhoto = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const todayIndex = getTodayIndex();
+  const savePhotoForDay = async (
+    file: File,
+    dayIndex: number
+  ) => {
+    if (!user || !room) return;
 
     setIsSavingPhoto(true);
-    setMessage("사진을 작게 줄이는 중이에요.");
+    setMessage("사진을 작게 줄이는 중이에요!");
 
     try {
       const photoDataUrl = await resizeImage(file);
-      await upsertMyEntry(
-        {
-          photoDataUrl,
-          photoUpdatedAt: getTimestamp(),
-        },
-        todayIndex
-      );
-      setMessage("사진이 압축되어 저장됐어요.");
-      setIsAddOpen(false);
+      const timestamp = getTimestamp();
+      const photoId = makeId();
+
+      await setDoc(doc(db, "rooms", room.id, "photos", photoId), {
+        uid: user.uid,
+        userName: room.members[user.uid]?.name ?? user.displayName ?? "이름 없는 친구",
+        userPhotoURL: room.members[user.uid]?.photoURL ?? user.photoURL ?? "",
+        weekId,
+        dayIndex,
+        dataUrl: photoDataUrl,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+
+      setMessage("사진이 압축되어 저장됐어요!");
     } catch (error) {
       setMessage(
         error instanceof Error
           ? error.message
-          : "사진 저장에 실패했어요. 다른 이미지를 골라주세요."
+          : "사진 저장에 실패했어요. 다른 이미지를 골라주세요!"
       );
     } finally {
       setIsSavingPhoto(false);
+    }
+  };
+
+  const uploadProfileComposerPhoto = async (
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      await savePhotoForDay(file, getTodayIndex());
+      setActiveProfileTab("photo");
+    } finally {
       event.target.value = "";
     }
+  };
+
+  const deletePhoto = async (photo: PhotoPost) => {
+    if (!room) return;
+
+    if (photo.source === "entry" && photo.entryId) {
+      await setDoc(
+        doc(db, "rooms", room.id, "entries", photo.entryId),
+        {
+          photoDataUrl: "",
+          photoUpdatedAt: null,
+          updatedAt: getTimestamp(),
+        },
+        { merge: true }
+      );
+    } else {
+      await deleteDoc(doc(db, "rooms", room.id, "photos", photo.id));
+    }
+
+
+    setMessage("사진을 삭제했어요!");
   };
 
   const members = useMemo(() => {
     if (!room) return [];
     return Object.values(room.members ?? {}).sort((a, b) => a.joinedAt - b.joinedAt);
   }, [room]);
+  const allPhotoPosts = useMemo<PhotoPost[]>(
+    () => [
+      ...entries
+        .filter((entry) => entry.photoDataUrl)
+        .map<PhotoPost>((entry) => ({
+          id: `entry_${entry.id}`,
+          uid: entry.uid,
+          userName: entry.userName,
+          userPhotoURL: entry.userPhotoURL,
+          weekId: entry.weekId,
+          dayIndex: entry.dayIndex,
+          dataUrl: entry.photoDataUrl,
+          createdAt: entry.photoUpdatedAt ?? entry.updatedAt,
+          updatedAt: entry.photoUpdatedAt ?? entry.updatedAt,
+          source: "entry",
+          entryId: entry.id,
+        })),
+      ...photoPosts,
+    ],
+    [entries, photoPosts]
+  );
+  const visibleStoryPhotos = useMemo(
+    () =>
+      allPhotoPosts.filter(
+        (photo) => storyNow - photo.createdAt < STORY_VISIBLE_MS
+      ),
+    [allPhotoPosts, storyNow]
+  );
+  const visibleStoryTodos = useMemo(
+    () =>
+      entries.flatMap((entry) => {
+        const member = members.find((candidate) => candidate.uid === entry.uid);
+        if (!member) return [];
+
+        return entry.todos
+          .filter(
+            (todo) =>
+              todo.isDone &&
+              Boolean(todo.completedAt) &&
+              storyNow - Number(todo.completedAt) < STORY_VISIBLE_MS
+          )
+          .map<StoryItem>((todo) => ({
+            type: "todoDone",
+            key: `${member.uid}_${entry.id}_${todo.id}_${todo.completedAt}`,
+            member,
+            entry,
+            todo,
+            timestamp: Number(todo.completedAt),
+          }));
+      }),
+    [entries, members, storyNow]
+  );
   const storyGroups = useMemo<StoryGroup[]>(
     () =>
       members
         .map((member) => ({
           member,
-          entries: entries
-            .filter((entry) => entry.uid === member.uid && entry.photoDataUrl)
+          items: [
+            ...visibleStoryPhotos
+              .filter((photo) => photo.uid === member.uid)
+              .map<StoryItem>((photo) => ({
+                type: "photo",
+                key: `${member.uid}_${photo.id}`,
+                member,
+                photo,
+                timestamp: photo.createdAt,
+              })),
+            ...visibleStoryTodos.filter(
+              (storyItem) => storyItem.member.uid === member.uid
+            ),
+          ]
             .sort(
-              (firstEntry, secondEntry) =>
-                (firstEntry.photoUpdatedAt ?? firstEntry.updatedAt) -
-                (secondEntry.photoUpdatedAt ?? secondEntry.updatedAt)
+              (firstStoryItem, secondStoryItem) =>
+                firstStoryItem.timestamp - secondStoryItem.timestamp
             ),
         }))
-        .filter((group) => group.entries.length),
-    [entries, members]
+        .filter((group) => group.items.length),
+    [members, visibleStoryPhotos, visibleStoryTodos]
   );
-  const storyItems: StoryItem[] = members
-    .flatMap((member) =>
-      entries
-        .filter((entry) => entry.uid === member.uid && entry.photoDataUrl)
-        .map((entry) => ({
-          key: `${member.uid}_${entry.id}`,
-          member,
-          entry,
-          timestamp: entry.photoUpdatedAt ?? entry.updatedAt,
-        }))
-    )
+  const storyItems: StoryItem[] = storyGroups
+    .flatMap((group) => group.items)
     .sort(
       (firstStoryItem, secondStoryItem) =>
         firstStoryItem.timestamp - secondStoryItem.timestamp
     );
-  const activeStoryItem = activeStoryUid ? storyItems[activeStoryIndex] : null;
+  const activeStoryItem =
+    activeStoryUid && activeStoryIndex < storyItems.length
+      ? storyItems[activeStoryIndex]
+      : null;
   const activeStoryCount = storyItems.length;
   const hasActiveStoryItem = Boolean(activeStoryItem);
 
@@ -904,7 +1122,7 @@ function App() {
 
         groups[dateKey] ??= {
           key: dateKey,
-          title: formatMonthDay(item.sortTime),
+          title: formatShortDate(item.sortTime),
           sortTime: item.sortTime,
           todos: [],
         };
@@ -927,6 +1145,12 @@ function App() {
       ),
     }))
     .sort((firstGroup, secondGroup) => secondGroup.sortTime - firstGroup.sortTime);
+  const myPhotoEntries = allPhotoPosts
+    .filter((photo) => photo.uid === user?.uid)
+    .sort(
+      (firstPhoto, secondPhoto) =>
+        secondPhoto.createdAt - firstPhoto.createdAt
+    );
   const likeNotifications = useMemo<LikeNotification[]>(() => {
     if (!user) return [];
 
@@ -934,17 +1158,18 @@ function App() {
       .filter((like) => like.ownerUid === user.uid)
       .map((like) => {
         const dayTitle = weekDays[like.dayIndex]?.title ?? "기록";
+        const reactionText = like.itemType === "photo" ? "좋아해요." : "응원해요.";
         const targetText =
           like.itemType === "photo"
-            ? `${dayTitle} 사진`
-            : `"${like.itemText}" 투두`;
+            ? `${dayTitle} 올린 사진을`
+            : `"${like.itemText}" 할 일을`;
 
         return {
           id: like.id,
           fromName: like.fromName,
           fromPhotoURL: like.fromPhotoURL,
           createdAt: like.createdAt,
-          message: `${like.fromName}님이 ${targetText}를 좋아해요.`,
+          message: `${like.fromName}님이 ${targetText} ${reactionText}`,
         };
       })
       .sort(
@@ -1088,46 +1313,222 @@ function App() {
             </div>
           )}
 
-          <section className="profile-todo-panel">
-            <div>
-              <strong>내 할 일</strong>
+          <section className="profile-manage-panel">
+            <div className="profile-tabs" aria-label="마이 보기 선택">
+              <button
+                className={activeProfileTab === "todo" ? "active" : ""}
+                onClick={() => setActiveProfileTab("todo")}
+                type="button"
+              >
+                내 할 일
+              </button>
+              <button
+                className={activeProfileTab === "photo" ? "active" : ""}
+                onClick={() => setActiveProfileTab("photo")}
+                type="button"
+              >
+                포토
+              </button>
             </div>
 
-            {myTodoGroups.length ? (
-              <div className="profile-todo-groups">
-                {myTodoGroups.map((group) => (
-                  <section className="profile-todo-group" key={group.key}>
-                    <h2>{group.title}</h2>
-                    <ul>
-                      {group.todos.map(({ dayIndex, todo }) => (
-                        <li className={todo.isDone ? "done" : ""} key={todo.id}>
-                          <input
-                            checked={todo.isDone}
-                            onChange={(event) =>
-                              updateTodo(todo.id, event.target.checked, dayIndex)
-                            }
-                            type="checkbox"
-                          />
-                          <div>
-                            <span>{todo.text}</span>
-                            <time>
-                              시작 {formatMonthDay(todo.createdAt)}
-                              {todo.completedAt
-                                ? ` · 완료 ${formatMonthDay(todo.completedAt)}`
-                                : ""}
-                            </time>
+            {activeProfileTab === "todo" ? (
+              myTodoGroups.length ? (
+                <div className="profile-todo-groups">
+                  {myTodoGroups.map((group) => (
+                    <section className="profile-todo-group" key={group.key}>
+                      <h2>{group.title}</h2>
+                      <ul>
+                        {group.todos.map(({ dayIndex, todo }) => {
+                          const todoKey = `${dayIndex}_${todo.id}`;
+                          const isEditingTodo = editingTodoKey === todoKey;
+
+                          return (
+                            <li
+                              className={todo.isDone ? "done" : ""}
+                              key={todo.id}
+                            >
+                              <div className="profile-todo-swipe">
+                                {isEditingTodo ? (
+                                  <div className="profile-edit-row">
+                                    <input
+                                      autoFocus
+                                      maxLength={255}
+                                      onChange={(event) =>
+                                        setEditingTodoText(event.target.value)
+                                      }
+                                      value={editingTodoText}
+                                    />
+                                    <button
+                                      disabled={!editingTodoText.trim()}
+                                      onClick={() =>
+                                        updateTodoText(todo.id, dayIndex)
+                                      }
+                                      type="button"
+                                    >
+                                      저장
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setEditingTodoKey("");
+                                        setEditingTodoText("");
+                                      }}
+                                      type="button"
+                                    >
+                                      취소
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <button
+                                      className="profile-todo-block"
+                                      onClick={() => {
+                                        const nextIsDone = !todo.isDone;
+                                        void updateTodo(
+                                          todo.id,
+                                          nextIsDone,
+                                          dayIndex
+                                        );
+
+                                        if (nextIsDone) {
+                                          setMessage(
+                                            "멋져요! 할 일을 완료했어요!"
+                                          );
+                                        }
+                                      }}
+                                      type="button"
+                                    >
+                                      <span className={'text-[15px]'}>{todo.text}</span>
+                                      <time className={'text-[10px]'}>
+                                        {formatTodoPeriod(todo)}
+                                      </time>
+                                    </button>
+                                    <div className="profile-item-actions">
+                                      <button
+                                        className={''}
+                                        onClick={() => {
+                                          setEditingTodoKey(todoKey);
+                                          setEditingTodoText(todo.text);
+                                        }}
+                                        type="button"
+                                      >
+                                        수정
+                                      </button>
+                                      <button
+                                        onClick={() =>
+                                          deleteTodo(todo.id, dayIndex)
+                                        }
+                                        type="button"
+                                      >
+                                        삭제
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <div className={'my-[60px]'}>
+                  <figure>
+                    <img src={"./src/assets/empty.png"}/>
+                  </figure>
+                <p className="empty-note">아직 등록한 할 일이 없어요.<br/>아래에서 작성해 보세요!</p>
+                </div>
+              )
+            ) : myPhotoEntries.length ? (
+              <div className="profile-photo-list">
+                {myPhotoEntries.map((photo) => {
+                  const photoLikes = likes.filter(
+                    (like) =>
+                      like.itemType === "photo" && like.entryId === photo.id
+                  );
+                  const isPhotoMenuOpen = openPhotoMenuId === photo.id;
+
+                  return (
+                    <section className="profile-photo-card" key={photo.id}>
+                      <img src={photo.dataUrl} alt="내가 올린 사진" />
+                      <button
+                        className={`profile-photo-menu-button ${
+                          isPhotoMenuOpen ? "active" : ""
+                        }`}
+                        onClick={() =>
+                          setOpenPhotoMenuId(isPhotoMenuOpen ? "" : photo.id)
+                        }
+                        type="button"
+                        title="사진 메뉴"
+                      >
+                        <PlusIcon/>
+                      </button>
+
+                      {isPhotoMenuOpen && (
+                        <div className="profile-photo-menu">
+                          <div className={'flex items-center gap-[2px] text-[14px] text-[#27934a]'}>
+                            <HeartIcon filled={photoLikes.length > 0} color={'#27934a'}/>
+                            <p className={' text-[#333333] font-normal '}>{photoLikes.length}</p>
                           </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ))}
+                          <div>
+                            <time
+                              className={'text-[#333333] font-normal text-[12px]'}>{formatDotDate(photo.createdAt)}</time>
+                            <button
+                              className={'min-h-[20px] text-[#333333] font-normal text-[12px] text-right font-bold'}
+                              onClick={() => deletePhoto(photo)}
+                              type="button"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
               </div>
             ) : (
-              <p className="empty-note">아직 등록한 할 일이 없어요.</p>
+              <div className={'my-[60px]'}>
+                <figure>
+                  <img src={"./src/assets/empty.png"}/>
+                </figure>
+                <p className="empty-note">아직 등록한 사진이 없어요.<br/>아래 왼쪽 버튼을 눌러 올려보세요!</p>
+              </div>
             )}
           </section>
         </section>
+
+        <form className="profile-composer" onSubmit={addTodoFromProfile}>
+          <label className="profile-composer-photo-button">
+            <input
+              accept="image/*"
+              disabled={isSavingPhoto}
+              onChange={uploadProfileComposerPhoto}
+              type="file"
+            />
+            <PhotoIcon size={30}/>
+          </label>
+          <input
+            maxLength={255}
+            onChange={(event) => setTodoText(event.target.value)}
+            placeholder="해야할 일을 입력해요"
+            value={todoText}
+          />
+          <button
+            disabled={!todoText.trim()}
+            onClick={() => {
+              void addTodo().then((didAddTodo) => {
+                if (didAddTodo) {
+                  setActiveProfileTab("todo");
+                }
+              });
+            }}
+            type="button"
+          >
+            작성
+          </button>
+        </form>
 
         {message && <p className="toast">{message}</p>}
       </main>
@@ -1202,19 +1603,6 @@ function App() {
         </div>
       </header>
 
-{/*      <nav className="day-tabs" aria-label="요일 선택">
-        {weekDays.map((day, index) => (
-          <button
-            className={index === activeDay ? "active" : ""}
-            key={day.key}
-            onClick={() => scrollToDay(index)}
-            type="button"
-          >
-            {day.shortLabel}
-          </button>
-        ))}
-      </nav>*/}
-
       {storyGroups.length > 0 && (
         <section className="story-rail" aria-label="스토리">
           {storyGroups.map((group) => (
@@ -1251,7 +1639,26 @@ function App() {
         }}
       >
         {(() => {
-          const feedItems = entries
+          const photoFeedItems: FeedItem[] = allPhotoPosts.flatMap<FeedItem>(
+            (photo) => {
+              const member = members.find(
+                (candidate) => candidate.uid === photo.uid
+              );
+
+              if (!member) return [];
+
+              return [
+                {
+                  type: "photo",
+                  key: `photo-${member.uid}-${photo.id}`,
+                  member,
+                  photo,
+                  timestamp: photo.createdAt,
+                },
+              ];
+            }
+          );
+          const todoFeedItems = entries
             .flatMap<FeedItem>((entry) => {
               const member = members.find((member) => member.uid === entry.uid);
 
@@ -1259,47 +1666,31 @@ function App() {
 
               const items: FeedItem[] = [];
 
-              if (
-                (activeFeedView === "all" || activeFeedView === "photo") &&
-                entry.photoDataUrl
-              ) {
-                items.push({
-                  type: "photo",
-                  key: `photo-${member.uid}-${entry.id}-${
-                    entry.photoUpdatedAt ?? entry.updatedAt
-                  }`,
-                  member,
-                  entry,
-                  timestamp: entry.photoUpdatedAt ?? entry.updatedAt,
-                });
-              }
-
-              if (activeFeedView === "all" || activeFeedView === "todo") {
-                entry.todos.forEach((todo) => {
-                  if (todo.isDone && todo.completedAt) {
-                    items.push({
-                      type: "todoDone",
-                      key: `todo-done-${member.uid}-${todo.id}-${todo.completedAt}`,
-                      member,
-                      entry,
-                      todo,
-                      timestamp: todo.completedAt,
-                    });
-                  }
-
+              entry.todos.forEach((todo) => {
+                if (todo.isDone && todo.completedAt) {
                   items.push({
-                    type: "todo",
-                    key: `todo-${member.uid}-${todo.id}`,
+                    type: "todoDone",
+                    key: `todo-done-${member.uid}-${todo.id}-${todo.completedAt}`,
                     member,
                     entry,
                     todo,
-                    timestamp: todo.createdAt,
+                    timestamp: todo.completedAt,
                   });
+                }
+
+                items.push({
+                  type: "todo",
+                  key: `todo-${member.uid}-${todo.id}`,
+                  member,
+                  entry,
+                  todo,
+                  timestamp: todo.createdAt,
                 });
-              }
+              });
 
               return items;
-            })
+            });
+          const feedItems = [...photoFeedItems, ...todoFeedItems]
             .sort(
               (firstItem, secondItem) => secondItem.timestamp - firstItem.timestamp
             );
@@ -1309,14 +1700,11 @@ function App() {
               <div className="friend-feed mt-[10px]">
                 {feedItems.length ? (
                   feedItems.map((item) => {
-                    const isMine = item.member.uid === user.uid;
-                    const isToday = item.entry.dayIndex === getTodayIndex();
-
                     if (item.type === "photo") {
                       const photoLikes = likes.filter(
                         (like) =>
                           like.itemType === "photo" &&
-                          like.entryId === item.entry.id
+                          like.entryId === item.photo.id
                       );
 
                       const hasLikedPhoto = photoLikes.some(
@@ -1334,15 +1722,18 @@ function App() {
                               </div>
                             )}
 
-                            <div>
+                            <div className={'gap-0'}>
                               <strong>{item.member.name}</strong>
+                              <span className={'text-[10px]'}>
+                                {formatShortDate(item.photo.createdAt)}
+                              </span>
                             </div>
                           </div>
 
                           <div className="photo-frame">
                             <img
                               className="daily-photo"
-                              src={item.entry.photoDataUrl}
+                              src={item.photo.dataUrl}
                               alt={`${item.member.name}의 하루 사진`}
                             />
                           </div>
@@ -1351,7 +1742,7 @@ function App() {
                             className={`flex gap-[2px] ${
                               hasLikedPhoto ? "active text-blue" : ""
                             }`}
-                            onClick={() => togglePhotoLike(item.entry)}
+                            onClick={() => togglePhotoLike(item.photo)}
                             type="button"
                           >
                             <HeartIcon className={'mt-[1px]'} filled={photoLikes.length > 0}/> <span className={'text-[#333333]'}>{photoLikes.length}</span>
@@ -1374,7 +1765,7 @@ function App() {
                     if (item.type === "todoDone") {
                       return (
                         <section
-                          className="relative friend-card todo-complete-card overflow-hidden"
+                          className="relative friend-card todo-complete-card overflow-hidden bg-[#fdfbf4]"
                           key={item.key}
                         >
                           <div className="friend-top">
@@ -1389,12 +1780,14 @@ function App() {
                             <div className={'gap-0'}>
                               <strong>{item.member.name}<p className={'inline ml-[2px] font-black text-green'}>님이 할 일을
                                 해냈어요!</p></strong>
-                              <span className={'text-[10px]'}>{formatHour(item.todo.completedAt)}</span>
+                              <span className={'text-[10px]'}>
+                                {formatTodoPeriod(item.todo)}
+                              </span>
                             </div>
                           </div>
 
                           <p className={'flex items-center'}>
-                            <strong className={'underline'}>{item.todo.text}</strong>
+                            <strong className={'underline single-todo-row'}>{item.todo.text}</strong>
                           </p>
                           <button
                             className={`flex gap-[2px] ${
@@ -1408,6 +1801,151 @@ function App() {
                           <figure className={'absolute bottom-[-30px] right-[-20px] w-[170px] inline-block opacity-45'}>
                             <img className={'w-full'} src={'./src/assets/stamp.png'} alt='스탬프'/>
                           </figure>
+                        </section>
+                      );
+                    }
+
+                    if (item.member.uid === user.uid) {
+                      return (
+                        <section
+                          className={`todo-feed-card ${
+                            item.todo.isDone ? "done" : ""
+                          }`}
+                          key={item.key}
+                        >
+                          <div className="feed-todo-swipe">
+                            <article
+                              className="friend-card feed-todo-card-body"
+                              onClick={() => {
+                                if (
+                                  editingTodoKey ===
+                                  `${item.entry.dayIndex}_${item.todo.id}`
+                                ) {
+                                  return;
+                                }
+
+                                const nextIsDone = !item.todo.isDone;
+                                void updateTodo(
+                                  item.todo.id,
+                                  nextIsDone,
+                                  item.entry.dayIndex
+                                );
+
+                                if (nextIsDone) {
+                                  setMessage("멋져요! 할 일을 완료했어요!");
+                                }
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key !== "Enter" && event.key !== " ") {
+                                  return;
+                                }
+
+                                event.preventDefault();
+                                event.currentTarget.click();
+                              }}
+                              role="button"
+                              tabIndex={0}
+                            >
+                              <div className="friend-top">
+                                {item.member.photoURL ? (
+                                  <img src={item.member.photoURL} alt=""/>
+                                ) : (
+                                  <div className="avatar-fallback">
+                                    {item.member.name.slice(0, 1)}
+                                  </div>
+                                )}
+
+                                <div className={'gap-0'}>
+                                  <strong>{item.member.name}</strong>
+                                  <span className={'text-[10px]'}>{formatShortDate(item.todo.createdAt)}</span>
+                                </div>
+                              </div>
+
+                              {editingTodoKey ===
+                              `${item.entry.dayIndex}_${item.todo.id}` ? (
+                                <div
+                                  className="profile-edit-row"
+                                  onClick={(event) => event.stopPropagation()}
+                                  role="presentation"
+                                >
+                                  <input
+                                    autoFocus
+                                    maxLength={255}
+                                    onChange={(event) =>
+                                      setEditingTodoText(event.target.value)
+                                    }
+                                    value={editingTodoText}
+                                  />
+                                  <button
+                                    disabled={!editingTodoText.trim()}
+                                    onClick={() =>
+                                      updateTodoText(
+                                        item.todo.id,
+                                        item.entry.dayIndex
+                                      )
+                                    }
+                                    type="button"
+                                  >
+                                    저장
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingTodoKey("");
+                                      setEditingTodoText("");
+                                    }}
+                                    type="button"
+                                  >
+                                    취소
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="profile-todo-block">
+                                  <span className={'text-[15px]'}>{item.todo.text}</span>
+                                  <time className={'text-[10px]'}>
+                                    {formatTodoPeriod(item.todo)}
+                                  </time>
+                                </div>
+                              )}
+                              <button
+                                className={`flex gap-[2px] ${
+                                  hasLikedTodo ? "active text-blue" : ""
+                                }`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleTodoLike(item.entry, item.todo.id)
+                                }}
+                                type="button"
+                              >
+                                <HeartIcon className={'mt-[1px]'}  filled={todoLikes.length > 0} /> <span className={'text-[#333333]'}>{todoLikes.length}</span>
+                              </button>
+                            </article>
+                            <div className="profile-item-actions">
+                              <button
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setEditingTodoKey(
+                                    `${item.entry.dayIndex}_${item.todo.id}`
+                                  );
+                                  setEditingTodoText(item.todo.text);
+                                }}
+                                type="button"
+                              >
+                                수정
+                              </button>
+                              <button
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void deleteTodo(
+                                    item.todo.id,
+                                    item.entry.dayIndex
+                                  );
+                                }}
+                                type="button"
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          </div>
                         </section>
                       );
                     }
@@ -1428,36 +1966,14 @@ function App() {
                             </div>
                           )}
 
-                          <div>
+                          <div className={'gap-0'}>
                             <strong>{item.member.name}</strong>
-                            <span>{formatHour(item.todo.createdAt)}</span>
+                            <span className={'text-[10px]'}>{formatShortDate(item.todo.createdAt)}</span>
                           </div>
                         </div>
 
                         <div className="single-todo-row">
-                          {isMine && isToday ? (
-                            <input
-                              checked={item.todo.isDone}
-                              onChange={(event) =>
-                                updateTodo(item.todo.id, event.target.checked)
-                              }
-                              type="checkbox"
-                            />
-                          ) : (
-                            <span className="status-dot"/>
-                          )}
-
                           <span>{item.todo.text}</span>
-
-                          {isMine && isToday && (
-                            <button
-                              onClick={() => deleteTodo(item.todo.id)}
-                              title="삭제"
-                              type="button"
-                            >
-                              ×
-                            </button>
-                          )}
                         </div>
                         <button
                           className={`flex gap-[2px] ${
@@ -1507,22 +2023,34 @@ function App() {
                 <span>{activeStoryItem.member.name.slice(0, 1)}</span>
               )}
               <strong>{activeStoryItem.member.name}</strong>
-              <time>{formatHour(activeStoryItem.entry.photoUpdatedAt)}</time>
+              <time>{formatHour(activeStoryItem.timestamp)}</time>
             </div>
-            <button onClick={closeStory} type="button">
+            <button className={'bg-transparent text-[12px]'} onClick={closeStory} type="button">
               닫기
             </button>
           </header>
 
           <div className="story-image-wrap">
-            <img
-              src={activeStoryItem.entry.photoDataUrl}
-              alt={`${activeStoryItem.member.name}의 스토리`}
-            />
+            {activeStoryItem.type === "photo" ? (
+              <img
+                src={activeStoryItem.photo.dataUrl}
+                alt={`${activeStoryItem.member.name}의 스토리`}
+              />
+            ) : (
+              <article className="story-todo-card">
+                <p>
+                  <strong>{activeStoryItem.member.name}</strong>님이 할 일을
+                  해냈어요!
+                </p>
+                <time>{formatTodoPeriod(activeStoryItem.todo)}</time>
+                <span>{activeStoryItem.todo.text}</span>
+              </article>
+            )}
           </div>
 
           <div className="story-controls">
             <button
+              className={'bg-transparent text-[14px]'}
               disabled={activeStoryIndex === 0}
               onClick={showPreviousStory}
               type="button"
@@ -1530,6 +2058,7 @@ function App() {
               이전
             </button>
             <button
+              className={'bg-transparent text-[14px]'}
               disabled={activeStoryIndex >= storyItems.length - 1}
               onClick={showNextStory}
               type="button"
@@ -1540,99 +2069,36 @@ function App() {
         </div>
       )}
 
-      {isAddOpen && (
-        <div className="add-modal-backdrop" role="presentation">
-          <section
-            aria-label="오늘 기록 추가"
-            className="add-modal"
-            role="dialog"
-          >
-            <div className="flex justify-between items-center">
-              <div>
-                <strong className={'text-[20px]'}>나누고 싶은 일을 추가해요</strong>
-              </div>
-              <button
-                className="min-h-[35px] text-[13px] text-[#333333]"
-                onClick={() => setIsAddOpen(false)}
-                type="button"
-              >
-                취소
-              </button>
-            </div>
-
-            <div className="todo-input mt-[10px]">
-              <input
-                autoFocus
-                maxLength={255}
-                value={todoText}
-                onChange={(event) => setTodoText(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") addTodo();
-                }}
-                placeholder="뭘 해볼까요?"
-              />
-            </div>
-            <div className={'flex justify-between items-center mt-[10px]'}>
-              <label className="photo-button">
-                <input
-                  accept="image/*"
-                  disabled={isSavingPhoto}
-                  onChange={uploadPhoto}
-                  type="file"
-                />
-                {isSavingPhoto ? "압축 중" : <PhotoIcon size={35}/>}
-              </label>
-              <button
-                className="text-[14px] bg-[#333333] text-white px-[30px] rounded-[6px]"
-                onClick={addTodo}
-                disabled={!todoText.trim()}
-                type="button"
-                title="할 일 추가"
-              >
-                게시
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      <div className="slide-indicators" aria-label="하단 페이지 선택">
+      <form className="profile-composer" onSubmit={addTodoFromProfile}>
+        <label className="profile-composer-photo-button">
+          <input
+            accept="image/*"
+            disabled={isSavingPhoto}
+            onChange={uploadProfileComposerPhoto}
+            type="file"
+          />
+          <PhotoIcon size={30}/>
+        </label>
+        <input
+          maxLength={255}
+          onChange={(event) => setTodoText(event.target.value)}
+          placeholder="해야할 일을 입력해요"
+          value={todoText}
+        />
         <button
-          className={activeFeedView === "all" ? "active" : ""}
-          onClick={() => setActiveFeedView("all")}
+          disabled={!todoText.trim()}
+          onClick={() => {
+            void addTodo().then((didAddTodo) => {
+              if (didAddTodo) {
+                setActiveProfileTab("todo");
+              }
+            });
+          }}
           type="button"
         >
-        <HomeIcon size={35}/>
+          작성
         </button>
-        <button
-          className={activeFeedView === "photo" ? "active" : ""}
-          onClick={() => setActiveFeedView("photo")}
-          type="button"
-        >
-          <PhotoIcon size={35}/>
-        </button>
-        <button
-          className="add-tab-button"
-          onClick={() => setIsAddOpen(true)}
-          type="button"
-        >
-          <PlusIcon size={50}/>
-        </button>
-        <button
-          className={activeFeedView === "todo" ? "active" : ""}
-          onClick={() => setActiveFeedView("todo")}
-          type="button"
-        >
-          <TodoIcon size={35}/>
-        </button>
-        <button
-          className={isProfileOpen ? "active" : ""}
-          onClick={() => setIsProfileOpen(true)}
-          type="button"
-        >
-          <MyIcon size={35}/>
-        </button>
-      </div>
+      </form>
 
       {message && <p className="toast">{message}</p>}
     </main>

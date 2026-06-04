@@ -7,6 +7,7 @@
   width: min(100%, 860px);
   margin: 0 auto;
   box-sizing: border-box;
+  background: var(--paper);
 }
 
 .auth-screen,
@@ -108,7 +109,7 @@ input:focus {
 
 button,
 .photo-button {
-  min-height: 42px;
+  min-height: 32px;
   border: 0;
   border-radius: 6px;
   cursor: pointer;
@@ -209,7 +210,7 @@ button:disabled,
 }
 
 .profile-screen {
-  padding: 18px;
+  padding: 18px 18px calc(96px + env(safe-area-inset-bottom));
 }
 
 .profile-header {
@@ -228,7 +229,6 @@ button:disabled,
   display: grid;
   justify-items: center;
   gap: 18px;
-  border: 1px solid var(--border);
   background: var(--surface);
   border-radius: 6px;
   box-shadow: var(--shadow);
@@ -293,22 +293,34 @@ button:disabled,
   text-align: center;
 }
 
-.profile-todo-panel {
+.profile-manage-panel {
   display: grid;
   gap: 12px;
   width: min(100%, 360px);
-  border-top: 1px solid var(--border);
-  padding-top: 18px;
+  padding: 12px 0;
 }
 
-.profile-todo-panel > div {
+.profile-tabs {
   display: grid;
-  gap: 3px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  border-radius: 6px;
+  background: var(--paper);
+  padding: 4px;
+
 }
 
-.profile-todo-panel > div span {
-  color: var(--text);
-  font-size: 13px;
+.profile-tabs button {
+  min-height: 36px;
+  background: transparent;
+  color: var(--black);
+  font-size: 14px;
+  padding: 14px;
+}
+
+.profile-tabs button.active {
+  background: var(--black);
+  color: var(--surface);
 }
 
 .profile-todo-groups {
@@ -328,7 +340,7 @@ button:disabled,
   font-weight: 900;
 }
 
-.profile-todo-panel ul {
+.profile-manage-panel ul {
   display: grid;
   gap: 8px;
   list-style: none;
@@ -336,36 +348,252 @@ button:disabled,
   padding: 0;
 }
 
-.profile-todo-panel li {
-  display: grid;
-  grid-template-columns: 24px 1fr;
-  gap: 8px;
-  align-items: start;
-  min-height: 42px;
+.profile-manage-panel li {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
   border-radius: 6px;
   background: var(--paper);
-  padding: 7px 10px;
+  padding: 0;
 }
 
-.profile-todo-panel li > div {
+.profile-manage-panel li::-webkit-scrollbar {
+  display: none;
+}
+
+.profile-manage-panel li > div {
+  display: flex;
+  min-width: calc(100% + 116px);
+}
+
+.profile-todo-block {
   display: grid;
-  gap: 3px;
+  gap: 4px;
+  flex: 0 0 calc(100% - 116px);
+  min-height: 58px;
+  scroll-snap-align: start;
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--text-strong);
+  text-align: left;
+  padding: 12px 14px;
 }
 
-.profile-todo-panel li.done div > span {
-  color: var(--text);
-  text-decoration: line-through;
+.profile-manage-panel li.done .profile-todo-block {
+  background: var(--mint-text);
+  color: white;
 }
 
-.profile-todo-panel input {
-  width: 18px;
-  min-height: 18px;
-  accent-color: var(--accent);
+.profile-todo-block span {
+  overflow-wrap: anywhere;
 }
 
-.profile-todo-panel time {
+.profile-manage-panel li.done .profile-todo-block time {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.feed-todo-swipe {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  width: 100%;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.feed-todo-swipe::-webkit-scrollbar {
+  display: none;
+}
+
+.feed-todo-card-body {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.todo-feed-card.done .feed-todo-card-body,
+.todo-feed-card.done .feed-todo-swipe .profile-todo-block {
+  background: var(--mint-text);
+  color: white;
+}
+
+.todo-feed-card.done .feed-todo-swipe .profile-todo-block time {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.profile-manage-panel time {
   color: var(--text);
   font-size: 12px;
+}
+
+.profile-edit-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px;
+  width: 100%;
+  min-width: 100%;
+  background: var(--paper);
+  padding: 7px;
+}
+
+.profile-edit-row input {
+  min-height: 36px;
+}
+
+.profile-edit-row button,
+.profile-item-actions button {
+  display: grid;
+  place-items: center;
+  min-height: 32px;
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--text-strong);
+  font-size: 12px;
+  padding: 0 10px;
+}
+
+.profile-item-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 58px);
+  flex: 0 0 116px;
+  scroll-snap-align: end;
+  margin: 0;
+}
+
+.profile-item-actions button {
+  min-height: 58px;
+  border-radius: 0;
+}
+
+.profile-item-actions button:first-child {
+  color: var(--accent);
+}
+
+.profile-item-actions button:last-child {
+  color: #333;
+}
+
+.profile-photo-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.profile-photo-card {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.profile-photo-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-photo-menu-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 28px;
+  min-height: 28px;
+  background: rgba(0, 0, 0, 0.3);
+  color: white;
+}
+
+.profile-photo-menu-button svg {
+  transition: transform 160ms ease;
+}
+
+.profile-photo-menu-button.active svg {
+  transform: rotate(45deg);
+}
+
+.profile-photo-menu {
+  position: absolute;
+  inset: auto 6px 6px 6px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text-strong);
+  padding: 6px;
+}
+
+.profile-photo-menu time,
+.profile-photo-menu span {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.profile-photo-menu > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.profile-composer {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 18;
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  width: min(100%, 860px);
+  transform: translateX(-50%);
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  backdrop-filter: blur(14px);
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+}
+
+.profile-composer input {
+  min-height: 42px;
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.profile-composer button,
+.profile-composer-photo-button {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  height: 42px;
+  border-radius: 999px;
+}
+
+.profile-composer button {
+  background: var(--black);
+  color: var(--surface);
+  font-size: 13px;
+  padding: 0 15px;
+}
+
+.profile-composer-photo-button {
+  width: 42px;
+  background: var(--paper);
+  color: var(--text-strong);
+  cursor: pointer;
+}
+
+.profile-composer-photo-button input {
+  display: none;
 }
 
 .notification-list {
@@ -605,6 +833,42 @@ button:disabled,
   object-fit: contain;
 }
 
+.story-todo-card {
+  display: grid;
+  place-items: center;
+  gap: 18px;
+  width: min(100%, 420px);
+  min-height: min(70vh, 560px);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-strong);
+  text-align: center;
+  padding: 28px;
+}
+
+.story-todo-card p {
+  margin: 0;
+  color: var(--mint-text);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.story-todo-card time {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.story-todo-card span {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 18px;
+  font-weight: 800;
+  text-decoration: underline;
+}
+
 .story-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -657,7 +921,6 @@ button:disabled,
 
 .composer span,
 .friend-top span,
-.empty-note,
 .top-bar span {
   color: var(--text);
   font-size: 13px;
@@ -769,16 +1032,23 @@ button:disabled,
 
 .single-todo-row {
   display: grid;
-  grid-template-columns: 24px 1fr 32px;
   gap: 8px;
   align-items: center;
   min-height: 54px;
+  width: 100%;
   border-radius: 6px;
-  background: var(--paper);
+  background: transparent;
+  color: var(--text-strong);
+  text-align: left;
   padding: 8px 4px 8px 8px;
+  font-size: 15px;
 }
 
-.todo-feed-card.done .single-todo-row > span:nth-child(2) {
+.single-todo-row.clickable {
+  cursor: pointer;
+}
+
+.todo-feed-card.done .single-todo-row > span {
   color: var(--text);
   text-decoration: line-through;
 }
@@ -823,89 +1093,22 @@ button:disabled,
 }
 
 .empty-note {
-  margin: 0;
-}
-
-.slide-indicators {
-  position: fixed;
-  left: 50%;
-  right: auto;
-  bottom: 0;
-  z-index: 15;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-  width: min(100%, 860px);
-  transform: translateX(-50%);
-  border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  backdrop-filter: blur(14px);
-  padding: 8px 18px calc(10px + env(safe-area-inset-bottom));
-}
-
-.slide-indicators button {
-  width: 100%;
-  min-height: 55px;
-  padding: 0 10px;
-  border-radius: 999px;
-  color: var(--text);
+  text-align: center;
   font-size: 14px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.slide-indicators .add-tab-button {
-  color: var(--accent);
-}
-
-.slide-indicators button.active {
-  width: 100%;
-  color: black
-}
-
-.add-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: grid;
-  align-items: end;
-  background: rgba(0, 0, 0, 0.38);
-  padding: 18px;
-}
-
-.add-modal {
-  display: grid;
-  gap: 14px;
-  width: min(100%, 520px);
-  margin: 0 auto;
-  border-radius: 6px;
-  background: var(--surface);
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
-  padding: 18px;
-}
-
-.add-modal-header {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.add-modal-header div {
-  display: grid;
-  gap: 3px;
-}
-
-.add-modal-header span {
-  color: var(--text);
-  font-size: 13px;
+  margin-top: 10px;
+  color: var(--mint-text)
 }
 
 .toast {
-  justify-self: center;
-  margin: 12px 18px 0;
+  position: fixed;
+  left: 50%;
+  bottom: calc(86px + env(safe-area-inset-bottom));
+  z-index: 60;
+  width: max-content;
+  max-width: calc(100% - 36px);
+  margin: 0;
   text-align: center;
+  transform: translateX(-50%);
 }
 
 .toast {
