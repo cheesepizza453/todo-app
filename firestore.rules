@@ -96,6 +96,32 @@ service cloud.firestore {
         allow delete: if isRoomMember(roomId)
           && resource.data.fromUid == request.auth.uid;
       }
+
+      match /comments/{commentId} {
+        allow read: if isRoomMember(roomId);
+
+        allow create: if isRoomMember(roomId)
+          && request.resource.data.fromUid == request.auth.uid
+          && request.resource.data.itemType in ['photo', 'todo']
+          && request.resource.data.entryId is string
+          && request.resource.data.todoId is string
+          && request.resource.data.ownerUid is string
+          && request.resource.data.fromName is string
+          && request.resource.data.fromPhotoURL is string
+          && request.resource.data.weekId is string
+          && request.resource.data.dayIndex is int
+          && request.resource.data.dayIndex >= 0
+          && request.resource.data.dayIndex <= 6
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 120
+          && request.resource.data.createdAt is number;
+
+        allow update: if false;
+
+        allow delete: if isRoomMember(roomId)
+          && resource.data.fromUid == request.auth.uid;
+      }
     }
   }
 }
