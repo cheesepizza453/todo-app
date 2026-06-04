@@ -1612,13 +1612,13 @@ function App() {
               onClick={() => openStory(group.member.uid)}
               type="button"
             >
-              <span>
+              <figure className={'w-[56px] h-[56px] rounded-full overflow-hidden'}>
                 {group.member.photoURL ? (
-                  <img src={group.member.photoURL} alt="" />
+                  <img className={'w-full h-full object-cover'} src={group.member.photoURL} alt="" />
                 ) : (
                   group.member.name.slice(0, 1)
                 )}
-              </span>
+              </figure>
               <strong>{group.member.name}</strong>
             </button>
           ))}

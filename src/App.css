@@ -702,7 +702,7 @@ button:disabled,
   padding: 0;
 }
 
-.story-bubble > span {
+.story-bubble > figure {
   display: grid;
   place-items: center;
   width: 56px;
