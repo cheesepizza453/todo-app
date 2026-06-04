@@ -1715,7 +1715,9 @@ function App() {
                         <section className="friend-card" key={item.key}>
                           <div className="friend-top">
                             {item.member.photoURL ? (
-                              <img src={item.member.photoURL} alt="" />
+                              <figure className={'relative w-[42px] h-[42px] overflow-hidden'}>
+                                <img className={'w-full h-full object-cover'} src={item.member.photoURL} alt="" />
+                              </figure>
                             ) : (
                               <div className="avatar-fallback">
                                 {item.member.name.slice(0, 1)}
@@ -1770,7 +1772,9 @@ function App() {
                         >
                           <div className="friend-top">
                             {item.member.photoURL ? (
-                              <img src={item.member.photoURL} alt=""/>
+                              <figure className={'relative w-[42px] h-[42px] overflow-hidden'}>
+                                <img className={'w-full h-full object-cover'} src={item.member.photoURL} alt="" />
+                              </figure>
                             ) : (
                               <div className="avatar-fallback">
                                 {item.member.name.slice(0, 1)}
@@ -1848,7 +1852,9 @@ function App() {
                             >
                               <div className="friend-top">
                                 {item.member.photoURL ? (
-                                  <img src={item.member.photoURL} alt=""/>
+                                  <figure className={'relative w-[42px] h-[42px] overflow-hidden'}>
+                                    <img className={'w-full h-full object-cover'} src={item.member.photoURL} alt="" />
+                                  </figure>
                                 ) : (
                                   <div className="avatar-fallback">
                                     {item.member.name.slice(0, 1)}
@@ -1956,7 +1962,9 @@ function App() {
                       >
                         <div className="friend-top">
                           {item.member.photoURL ? (
-                            <img src={item.member.photoURL} alt=""/>
+                            <figure className={'relative w-[42px] h-[42px] overflow-hidden'}>
+                              <img className={'w-full h-full object-cover'} src={item.member.photoURL} alt="" />
+                            </figure>
                           ) : (
                             <div className="avatar-fallback">
                               {item.member.name.slice(0, 1)}
