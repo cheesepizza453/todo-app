@@ -1574,7 +1574,7 @@ function App() {
 
   return (
     <main className="app-shell py-[20px]">
-      <header className="room-header">
+      <header className="room-header pt-[4px] px-[18px] pb-[16px]">
         <div className="w-full flex items-center justify-between header-icon-actions">
           <button
             className="profile-icon-button"
@@ -1604,7 +1604,7 @@ function App() {
       </header>
 
       {storyGroups.length > 0 && (
-        <section className="story-rail" aria-label="스토리">
+        <section className="story-rail px-[18px] pb-[14px]" aria-label="스토리">
           {storyGroups.map((group) => (
             <button
               className="story-bubble"
@@ -1696,7 +1696,7 @@ function App() {
             );
 
           return (
-            <article className="day-slide">
+            <article className="day-slide px-[15px]">
               <div className="friend-feed mt-[10px]">
                 {feedItems.length ? (
                   feedItems.map((item) => {
